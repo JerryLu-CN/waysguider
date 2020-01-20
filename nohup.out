@@ -1,0 +1,63 @@
+[W 13:15:48.105 LabApp] WARNING: The notebook server is listening on all IP addresses and not using encryption. This is not recommended.
+[I 13:15:48.111 LabApp] JupyterLab extension loaded from /data/wwq/anaconda3/lib/python3.7/site-packages/jupyterlab
+[I 13:15:48.111 LabApp] JupyterLab application directory is /data/wwq/anaconda3/share/jupyter/lab
+[I 13:15:48.112 LabApp] Serving notebooks from local directory: /data/lzt/project/waysguider
+[I 13:15:48.113 LabApp] The Jupyter Notebook is running at:
+[I 13:15:48.113 LabApp] http://gpuserver:8181/
+[I 13:15:48.113 LabApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[I 13:17:14.154 LabApp] 302 GET / (127.0.0.1) 0.96ms
+[I 13:17:14.159 LabApp] 302 GET /lab? (127.0.0.1) 1.17ms
+[I 13:17:16.133 LabApp] 302 POST /login?next=%2Flab%3F (127.0.0.1) 2.01ms
+[I 13:17:18.021 LabApp] Build is up to date
+[W 13:17:18.134 LabApp] 404 GET /api/contents/project/waysguider?1578979038127 (127.0.0.1): No such file or directory: project/waysguider
+[W 13:17:18.135 LabApp] No such file or directory: project/waysguider
+[W 13:17:18.135 LabApp] 404 GET /api/contents/project/waysguider?1578979038127 (127.0.0.1) 2.27ms referer=http://localhost:8889/lab?
+[W 13:17:18.138 LabApp] 404 GET /api/contents/project/waysguider/model.py?content=0&1578979038129 (127.0.0.1): No such file or directory: project/waysguider/model.py
+[W 13:17:18.138 LabApp] No such file or directory: project/waysguider/model.py
+[W 13:17:18.139 LabApp] 404 GET /api/contents/project/waysguider/model.py?content=0&1578979038129 (127.0.0.1) 1.88ms referer=http://localhost:8889/lab?
+[W 13:17:18.141 LabApp] 404 GET /api/contents/project/waysguider/train.py?content=0&1578979038130 (127.0.0.1): No such file or directory: project/waysguider/train.py
+[W 13:17:18.142 LabApp] No such file or directory: project/waysguider/train.py
+[W 13:17:18.142 LabApp] 404 GET /api/contents/project/waysguider/train.py?content=0&1578979038130 (127.0.0.1) 2.91ms referer=http://localhost:8889/lab?
+[W 13:17:18.143 LabApp] 404 GET /api/contents/project/waysguider/dataset.py?content=0&1578979038131 (127.0.0.1): No such file or directory: project/waysguider/dataset.py
+[W 13:17:18.143 LabApp] No such file or directory: project/waysguider/dataset.py
+[W 13:17:18.143 LabApp] 404 GET /api/contents/project/waysguider/dataset.py?content=0&1578979038131 (127.0.0.1) 3.07ms referer=http://localhost:8889/lab?
+[W 13:17:18.145 LabApp] 404 GET /api/contents/project/waysguider/utils.py?content=0&1578979038132 (127.0.0.1): No such file or directory: project/waysguider/utils.py
+[W 13:17:18.146 LabApp] No such file or directory: project/waysguider/utils.py
+[W 13:17:18.146 LabApp] 404 GET /api/contents/project/waysguider/utils.py?content=0&1578979038132 (127.0.0.1) 2.06ms referer=http://localhost:8889/lab?
+[I 13:17:51.254 LabApp] New terminal with automatic name: 1
+TermSocket.open: 1
+TermSocket.open: Opened 1
+[I 13:22:10.865 LabApp] Saving file at /dataset.py
+[I 13:23:01.515 LabApp] Saving file at /train.py
+[I 13:23:52.234 LabApp] Saving file at /train.py
+[I 13:26:24.793 LabApp] New terminal with automatic name: 2
+TermSocket.open: 2
+TermSocket.open: Opened 2
+[I 13:33:03.529 LabApp] Saving file at /train.py
+[I 13:33:36.046 LabApp] New terminal with automatic name: 3
+TermSocket.open: 3
+TermSocket.open: Opened 3
+[I 13:41:14.109 LabApp] Saving file at /train.py
+[I 13:42:55.761 LabApp] Saving file at /train.py
+[I 13:43:53.496 LabApp] Saving file at /train.py
+[I 13:44:30.356 LabApp] Saving file at /train.py
+[I 13:45:41.962 LabApp] Saving file at /train.py
+[I 13:45:52.306 LabApp] Saving file at /train.py
+[I 13:46:43.429 LabApp] Saving file at /dataset.py
+[I 13:50:14.548 LabApp] Saving file at /train.py
+[I 13:54:44.924 LabApp] Saving file at /train.py
+[I 13:55:59.869 LabApp] EOF on FD 13; stopping reading
+[I 13:55:59.970 LabApp] Terminal 2 closed
+Websocket closed
+Websocket closed
+Websocket closed
+TermSocket.open: 3
+TermSocket.open: Opened 3
+TermSocket.open: 1
+TermSocket.open: Opened 1
+[W 14:19:18.845 LabApp] WebSocket ping timeout after 90030 ms.
+[W 14:19:18.846 LabApp] WebSocket ping timeout after 90014 ms.
+Websocket closed
+Websocket closed
+[C 14:53:01.016 LabApp] received signal 15, stopping
+[I 14:53:01.017 LabApp] Shutting down 0 kernels
