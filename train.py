@@ -16,7 +16,7 @@ torch.cuda.manual_seed(0)
 
 data_path = '/data/lzt/project/waysguider/dataset'
 decoder_dim = 512
-condition_dim = 10 #????
+condition_dim = 4
 dropout = 0.5
 
 start_epoch = 1
@@ -84,7 +84,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
         # Forward prop.
         imgs = encoder(imgs) # encoder_out
-        pred, sort_ind = decoder(imgs, enter, esc, seq, length)
+        pred, sort_ind, alphas = decoder(imgs, enter, esc, seq, length)
         # pred (b,max_len,2)
 
         targets = seq[sort_ind,:,:] # to the sorted version
@@ -95,6 +95,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
         # Calculate loss
         loss = criterion(pred.data, targets.data)
+        loss += alpha_c * ((1. - alphas.sum(dim=1)) ** 2).mean()
 
         # Back prop.
         decoder_optimizer.zero_grad()
@@ -157,7 +158,7 @@ def validate(val_loader, encoder, decoder, criterion):
             # Forward prop.
             if encoder is not None:
                 imgs_encode = encoder(imgs)
-            pred, sort_ind = decoder(imgs_encode, enter, esc, seq, length)
+            pred, sort_ind, alphas = decoder(imgs_encode, enter, esc, seq, length)
 
             targets = seq[sort_ind,:,:]
             length = length[sort_ind,:]
@@ -183,10 +184,10 @@ def validate(val_loader, encoder, decoder, criterion):
     return losses.avg, imgs[sort_ind,:,:,:], pred, enter[sort_ind,:], esc[sort_ind,:], length[sort_ind,:]
 
 def main():
-    global epochs_since_improvement, checkpoint, start_epoch, fine_tune_encoder, best_loss, save_path, vis_dir
+    global epochs_since_improvement, checkpoint, start_epoch, fine_tune_encoder, best_loss, save_path, vis_dir, decoder_dim
 
     if checkpoint is None:
-        decoder = Decoder(condition_dim, decoder_dim, encoder_dim=2048, dropout=0.5)
+        decoder = Decoder(decoder_dim)
         decoder_optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, decoder.parameters()),
                                          lr=decoder_lr)
         encoder = Encoder()
