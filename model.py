@@ -23,7 +23,6 @@ class Encoder(nn.Module):
         
         # use hrnet pretrained result
         self.encodenet = torch.load('model_best.pth')
-        self.conv = nn.Conv2d(1,4,kernel_size=(1,1)) # map channel 1 to channel 4
 
         # Resize image to fixed size to allow input images of variable size
         self.adaptive_pool = nn.AdaptiveAvgPool2d((encoded_image_size, encoded_image_size))
@@ -38,9 +37,8 @@ class Encoder(nn.Module):
         :return: encoded images
         """
         out = self.encodenet(images)  # (batch_size, 1, image_size/32, image_size/32)
-        out = self.conv(out) # (batch_size, encode_dim, image_size/32, image_size/32)
         out = self.adaptive_pool(out)  # (batch_size, encode_dim, encoded_image_size, encoded_image_size)
-        out = out.permute(0, 2, 3, 1)  # (batch_size, encoded_image_size, encoded_image_size, 2048)
+        out = out.permute(0, 2, 3, 1)  # (batch_size, encoded_image_size, encoded_image_size, 1)
         return out
 
     def fine_tune(self, fine_tune=True):
@@ -82,24 +80,26 @@ class Attention(nn.Module):
         :param decoder_hidden: previous decoder output, a tensor of dimension (batch_size, decoder_dim)
         :return: attention weighted encoding, weights
         """
+        batch_size = encoder_out.shape[0]
         att1 = self.encoder_att(encoder_out)  # (batch_size, num_pixels, attention_dim)
         att2 = self.decoder_att(decoder_hidden)  # (batch_size, attention_dim)
         att = self.full_att(self.relu(att1 + att2.unsqueeze(1))).squeeze(2)  # (batch_size, num_pixels)
         alpha = self.softmax(att)  # (batch_size, num_pixels)
-        attention_weighted_encoding = (encoder_out * alpha.unsqueeze(2)).sum(dim=1)  # (batch_size, encoder_dim)
+        attention_weighted_encoding = (encoder_out * alpha.unsqueeze(2)).sum(dim=2).view(batch_size,-1)  # (batch_size, num_pixels)
 
         return attention_weighted_encoding, alpha
 
 
 class Decoder(nn.Module):
     """Decoder with Attention module"""
-    def __init__(self,decoder_dim, condition_dim=4, encoder_dim=4, position_dim=128, attention_dim=512 , dropout=0.5):
+    def __init__(self,decoder_dim, condition_dim=256, encoder_size=256,encoder_dim=1, position_dim=128, attention_dim=4 , dropout=0.5):
         """
         :param encoder_dim: feature size of encoded images
         :param decoder_dim: size of decoder's RNN
         """
         super().__init__()
-        self.encoder_dim = encoder_dim
+        self.encoder_dim = encoder_dim # 1
+        self.encoder_size = encoder_size # 16*16
         self.position_embedding_dim = position_dim  # 位置embedding？
         self.condition_dim = condition_dim # enter point coordination / esc direction
         self.decoder_dim = decoder_dim
@@ -110,11 +110,11 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
         # 这里有个问题，位置信息是否需要先做embedding？
         self.position_embedding = nn.Linear(2,self.position_embedding_dim)
-        self.decoder = nn.LSTMCell(self.position_embedding_dim + self.encoder_dim, decoder_dim,bias=True) # 2 indicates (X,Y)
+        self.decoder = nn.LSTMCell(self.position_embedding_dim + self.encoder_size, decoder_dim,bias=True) # 2 indicates (X,Y)
         self.init_condition = nn.Linear(6, condition_dim)
-        self.init_h = nn.Linear(encoder_dim + condition_dim, decoder_dim)
-        self.init_c = nn.Linear(encoder_dim + condition_dim, decoder_dim)
-        self.f_beta = nn.Linear(decoder_dim, encoder_dim)
+        self.init_h = nn.Linear(encoder_size + condition_dim, decoder_dim)
+        self.init_c = nn.Linear(encoder_size + condition_dim, decoder_dim)
+        self.f_beta = nn.Linear(decoder_dim, encoder_size)
         self.sigmoid= nn.Sigmoid()
         self.fc = nn.Linear(decoder_dim, 2) # regression question
         self.init_weights()
@@ -135,12 +135,13 @@ class Decoder(nn.Module):
         :param esc: escape point
         :return: hidden state, cell state
         """
-        mean_encoder_out = encoder_out.mean(dim=1) # (batch_size, encoder_dim)
+
+        flat_encoder_out = encoder_out.view(encoder_out.shape[0],-1) # (batch_size, 16*16)
         condition = torch.cat([enter,esc],dim=1) # (batch_size,6)
         condition_embedding = self.init_condition(condition)  # (batch_size,condition_dim)
 
-        h = self.init_h(torch.cat([mean_encoder_out,condition_embedding],dim=1)) # (batch_size, decoder_dim)
-        c = self.init_c(torch.cat([mean_encoder_out,condition_embedding],dim=1))
+        h = self.init_h(torch.cat([flat_encoder_out,condition_embedding],dim=1)) # (batch_size, decoder_dim)
+        c = self.init_c(torch.cat([flat_encoder_out,condition_embedding],dim=1))
         return h, c
 
     def forward(self, encoder_out, enter, esc, sequence, seq_len):
@@ -164,11 +165,11 @@ class Decoder(nn.Module):
 
         # Sort input data by decreasing lengths; why? apparent below
         seq_len, sort_ind = seq_len.squeeze(1).sort(dim=0, descending=True)
-        encoder_out = encoder_out[sort_ind]
-        sequence = sequence[sort_ind]
+        encoder_out = encoder_out[sort_ind,:,:]
+        sequence = sequence[sort_ind,:,:]
 
         # position embedding ???
-        sequence =  self.position_embedding(sequence)
+        sequence =  self.position_embedding(sequence) # (b,max_len,position_embedding_dim)
 
         # Initialize LSTM state
         h, c = self.init_hidden_state(encoder_out, enter, esc)  # (batch_size, decoder_dim)
@@ -183,7 +184,7 @@ class Decoder(nn.Module):
         for t in range(sequence.shape[1]):
             batch_size_t = sum([l > t for l in seq_len])
             attention_weighted_encoding, alpha = self.attention(encoder_out[:batch_size_t],
-                                                                h[:batch_size_t])
+                                                                h[:batch_size_t]) #(b,e_size) (b,e_size)
             gate = self.sigmoid(self.f_beta(h[:batch_size_t]))
             attention_weighted_encoding = gate * attention_weighted_encoding
             h, c = self.decoder(

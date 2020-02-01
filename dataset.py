@@ -1,3 +1,4 @@
+#coding:utf-8
 import os
 import copy
 import numpy as np
@@ -12,9 +13,11 @@ from collections import Counter
 
 class GuiderDataset(Dataset):
 
-    def __init__(self, dir_path, test_size, max_len):
+    def __init__(self, dir_path, test_size, max_len, min_len=20, target_inter=0.8):
         self.dir = dir_path
         self.max_len = max_len # use to padding all sequence to a fixed length
+        self.min_len = min_len # use to delete sequence with too many points
+        self.target_inter = target_inter
         self.pic_dir = os.path.join(self.dir,'map/')
         self.seq_dir = os.path.join(self.dir,'seq/')
         self.pic_name = []
@@ -36,12 +39,15 @@ class GuiderDataset(Dataset):
             w,h = anchor[1]
             data = np.delete(data,0)  # !!! here delete the anchor point
             for seq in data:
-                if len(seq) == 2:
-                    # omit
+                if len(seq) > self.min_len:
+                    # omit too long
+                    continue
+                if cal_dis(seq) < 0.2:
+                    continue # delete seq too short
+                if intervals_avg(seq) > 1:
                     continue
                 if seq[-1] == [2,2] or seq[0] == [2,2]:
-                    # omit sequence which start or end inner a grid, temporally.
-                    continue
+                    seq = seq[:-1] # !!! 暂不考虑
                 for i in range(len(seq)):
                     if isinstance(seq[i],tuple):
                         seq[i] = list(seq[i])
@@ -77,8 +83,8 @@ class GuiderDataset(Dataset):
         trans = transforms.Compose(
             [transforms.Resize((512,512)),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])]
-        )
+            #transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
+            ])
         image_name = seq[-1]
         seq = seq[:-1]
         image_path = os.path.join(self.pic_dir,image_name+'.png')
@@ -87,7 +93,8 @@ class GuiderDataset(Dataset):
 
         enter_point = torch.tensor(seq[0],dtype=torch.float) # dim = 2
         esc_d = torch.tensor(cal_direction(seq[-1]),dtype=torch.float) # dim = 4 for 4 direction
-
+        
+        # <----- data preprocess ------->
         if seq_len < self.max_len:
             seq += [[0., 0.] for _ in range(self.max_len - seq_len)]
         elif seq_len > self.max_len:
@@ -96,6 +103,8 @@ class GuiderDataset(Dataset):
             ind = [dis*i for i in range(self.max_len)]
             seq = [seq[i] for i in ind]
             seq_len = self.max_len # be careful!
+        # <----------------------------->
+        
         seq = torch.tensor(seq ,dtype=torch.float) # (max_len, 2)
         seq_len = torch.tensor(seq_len,dtype=torch.long).unsqueeze(0)
 
@@ -136,6 +145,24 @@ def cal_direction(point):
     direction = [0,0,0,0]
     direction[di] = 1
     return direction
+
+def intervals_avg(seq):
+    '''used to calculate the average intervals of a certain sequence'''
+    #seq = seq.tolist()
+    seq_ = np.array(seq[1:])
+    seq = np.array(seq[:-1])
+    intervals = np.sqrt(np.power(seq-seq_,2).sum(axis=1)).mean()
+    return intervals
+    
+    
+def cal_dis(seq):
+    '''calculate the distance between seq[0] and seq[-1]'''
+    x1 = seq[0][0]
+    y1 = seq[0][1]
+    x2 = seq[-1][0]
+    y2 = seq[-1][1]
+    dis = np.sqrt((y2 - y1)**2 + (x2 - x1)**2).item()
+    return dis
     
     
 # debug

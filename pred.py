@@ -25,7 +25,7 @@ def predict(checkpoint ,data_path, output_path):
     """
     prediction
     """
-    max_len = 24
+    max_len = 10
     batch_size = 32
 
     checkpoint = torch.load(checkpoint)
@@ -62,9 +62,13 @@ def predict(checkpoint ,data_path, output_path):
             predictions = torch.zeros((batch_size,max_len,2)).to(device)  # (b,max_len,2)
             predictions[:,0,:] = enter
 
+
             for t in range(max_len):
+                attention_weighted_encoding, alpha = decoder.attention(encoder_out,h)
+                gate = decoder.sigmoid(decoder.f_beta(h))
+                attention_weighted_encoding = gate * attention_weighted_encoding
                 h, c = decoder.decoder(
-                    predictions[:,t,:],
+                    torch.cat([decoder.position_embedding(predictions[:,t,:]),attention_weighted_encoding],dim=1),
                     (h, c))  # (batch_size_t, decoder_dim)
                 preds = decoder.fc(decoder.dropout(h))  # (batch_size_t, 2)
                 if t < max_len - 1:

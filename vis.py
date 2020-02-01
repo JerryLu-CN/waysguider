@@ -36,12 +36,12 @@ def visualize(output_dir,imgs, seq, enter, esc, length, epoch):
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
     
-    for k in range(len(imgs)):
+    for k in range(len(seq)):
         img = imgs[k].numpy()
         c,w,h = img.shape
-        img[0] = img[0]*0.229+0.485
-        img[1] = img[1]*0.224+0.456
-        img[2] = img[2]*0.225+0.406
+        #img[0] = img[0]*0.229+0.485
+        #img[1] = img[1]*0.224+0.456
+        #img[2] = img[2]*0.225+0.406
         img = img * 255
         img.astype(np.int)
         img = img.transpose(1,2,0)

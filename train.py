@@ -15,8 +15,7 @@ torch.manual_seed(0)
 torch.cuda.manual_seed(0)
 
 data_path = '/data/lzt/project/waysguider/dataset'
-decoder_dim = 512
-condition_dim = 4
+decoder_dim = 128
 dropout = 0.5
 
 start_epoch = 1
@@ -35,7 +34,7 @@ checkpoint = None  # path to checkpoint, None if none
 save_path = './checkpoint/' # checkpoint save path
 vis_dir = './vis/' # store visualized result
 
-max_len = 24 # the longest sequence
+max_len = 10 # the longest sequence
 
 def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_optimizer, epoch):
     """
@@ -73,29 +72,24 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
         #    print(img_name)
         #    continue
         if i == 117:
-            print('img:',imgs)
-            print('seq:',seq)
-            print('enter:',enter)
-            print('esc:',esc)
-            print('length:',length)
             continue
             
         data_time.update(time.time() - start)
 
         # Forward prop.
         imgs = encoder(imgs) # encoder_out
-        pred, sort_ind, alphas = decoder(imgs, enter, esc, seq, length)
+        pred, sort_ind, alphas = decoder(imgs, enter, esc, seq[:,:-1,:], length-1)
         # pred (b,max_len,2)
 
-        targets = seq[sort_ind,:,:] # to the sorted version
-        length = length[sort_ind,:]
+        targets = seq[sort_ind,1:,:] # to the sorted version
+        length = length[sort_ind,:] - 1
         # Remove timesteps that we didn't decode at, or are pads
-        pred = pack_padded_sequence(pred, length.squeeze(1), batch_first=True)
-        targets = pack_padded_sequence(targets, length.squeeze(1), batch_first=True)
+        #pred = pack_padded_sequence(pred, length.squeeze(1), batch_first=True)
+        #targets = pack_padded_sequence(targets, length.squeeze(1), batch_first=True)
 
         # Calculate loss
-        loss = criterion(pred.data, targets.data)
-        loss += alpha_c * ((1. - alphas.sum(dim=1)) ** 2).mean()
+        loss = criterion(pred, targets)
+        #loss += alpha_c * ((1. - alphas.sum(dim=1)) ** 2).mean()
 
         # Back prop.
         decoder_optimizer.zero_grad()
@@ -158,17 +152,17 @@ def validate(val_loader, encoder, decoder, criterion):
             # Forward prop.
             if encoder is not None:
                 imgs_encode = encoder(imgs)
-            pred, sort_ind, alphas = decoder(imgs_encode, enter, esc, seq, length)
+            pred, sort_ind, alphas = decoder(imgs_encode, enter, esc, seq[:,:-1,:], length - 1)
 
-            targets = seq[sort_ind,:,:]
-            length = length[sort_ind,:]
+            targets = seq[sort_ind,1:,:]
+            length = length[sort_ind,:] - 1
 
             pred_cal = pred.clone()
-            pred_cal = pack_padded_sequence(pred_cal, length.squeeze(1), batch_first=True)
-            targets = pack_padded_sequence(targets, length.squeeze(1), batch_first=True)
+            #pred_cal = pack_padded_sequence(pred_cal, length.squeeze(1), batch_first=True)
+            #targets = pack_padded_sequence(targets, length.squeeze(1), batch_first=True)
 
             # Calculate loss
-            loss = criterion(pred_cal.data, targets.data)
+            loss = criterion(pred_cal, targets)
 
             # Keep track of metrics
             losses.update(loss.item(),length.sum().item())
