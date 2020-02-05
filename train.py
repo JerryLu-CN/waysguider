@@ -1,3 +1,4 @@
+#coding:utf-8
 import time
 import torch.utils.data as Data
 import torch.nn as nn
