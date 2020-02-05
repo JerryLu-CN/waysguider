@@ -13,7 +13,7 @@ from collections import Counter
 
 class GuiderDataset(Dataset):
 
-    def __init__(self, dir_path, test_size, max_len, min_len=20, target_inter=0.8):
+    def __init__(self, dir_path, test_size, max_len, min_len=30, target_inter=0.8):
         self.dir = dir_path
         self.max_len = max_len # use to padding all sequence to a fixed length
         self.min_len = min_len # use to delete sequence with too many points
@@ -83,7 +83,7 @@ class GuiderDataset(Dataset):
         trans = transforms.Compose(
             [transforms.Resize((512,512)),
             transforms.ToTensor(),
-            #transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
             ])
         image_name = seq[-1]
         seq = seq[:-1]
@@ -93,7 +93,7 @@ class GuiderDataset(Dataset):
 
         enter_point = torch.tensor(seq[0],dtype=torch.float) # dim = 2
         esc_d = torch.tensor(cal_direction(seq[-1]),dtype=torch.float) # dim = 4 for 4 direction
-        
+
         # <----- data preprocess ------->
         if seq_len < self.max_len:
             seq += [[0., 0.] for _ in range(self.max_len - seq_len)]
@@ -104,7 +104,7 @@ class GuiderDataset(Dataset):
             seq = [seq[i] for i in ind]
             seq_len = self.max_len # be careful!
         # <----------------------------->
-        
+
         seq = torch.tensor(seq ,dtype=torch.float) # (max_len, 2)
         seq_len = torch.tensor(seq_len,dtype=torch.long).unsqueeze(0)
 
@@ -125,15 +125,15 @@ def cal_direction(point):
     give out the closest direction of the sequnce final point
     :param: point should be a list
     :output: direction dim = 4
-        x+y-1 | x-y | direction
-        +     | +   | 3 
-        +     | -   | 2
-        -     | +   | 0
-        -     | -   | 1
+        x+y   | x-y | direction
+        +     | +   | 3  right
+        +     | -   | 2  up
+        -     | +   | 0  below
+        -     | -   | 1  left
     '''
-    a = point[0] + point[1] - 1
+    a = point[0] + point[1]
     b = point[0] - point[1]
-    
+
     if a > 0 and b > 0:
         di = 3
     elif a > 0 and b <= 0:
@@ -153,8 +153,8 @@ def intervals_avg(seq):
     seq = np.array(seq[:-1])
     intervals = np.sqrt(np.power(seq-seq_,2).sum(axis=1)).mean()
     return intervals
-    
-    
+
+
 def cal_dis(seq):
     '''calculate the distance between seq[0] and seq[-1]'''
     x1 = seq[0][0]
@@ -163,17 +163,79 @@ def cal_dis(seq):
     y2 = seq[-1][1]
     dis = np.sqrt((y2 - y1)**2 + (x2 - x1)**2).item()
     return dis
-    
-    
+
+
 # debug
 if __name__ == '__main__':
     torch.manual_seed(0)
     torch.cuda.manual_seed(0)
     data_path = '/data/lzt/project/waysguider/dataset'
-    dataset = GuiderDataset(data_path,0.2,max_len=8)
+    dataset = GuiderDataset(data_path,0.2,max_len=20)
     data = dataset.data[10]
     cache = []
     for i in range(len(dataset.data)):
         cache.append(len(dataset.data[i]))
     summary = Counter(cache)
     print(summary)
+
+    ## visualize dataset
+    output_path = 'output'
+    train_loader = DataLoader(dataset.train_set(), batch_size=32, shuffle=False)
+    for i,data in enumerate(train_loader):
+        #save_dir = os.path.join(output_path,str(i))
+        save_dir = output_path
+        if not os.path.exists(save_dir):
+            os.mkdir(save_dir)
+        imgs = data['image'] # (b,c,w,h)
+        seq = data['seq'] # (b,max_len,2)
+        enter = data['enter'] # (b,2)
+        esc = data['esc'] # (b,4) # onehot indicate 4 direction
+        length = data['len'] # (b,1) it seem to be a 1D CPU int64 tensor when use pack_padded_sequence below
+        #print(imgs)
+        for k in range((len(data['image']))):
+            img = imgs[k].numpy()
+            c,w,h = img.shape
+            img[0] = img[0]*0.229+0.485
+            img[1] = img[1]*0.224+0.456
+            img[2] = img[2]*0.225+0.406
+            img = img * 255
+            img.astype('int')
+            img = img.transpose(1,2,0) # chw -> hwc
+            img = img[...,::-1] #rgb --> bgr
+            #print(enter[k],esc[k])
+            img = cv.copyMakeBorder(img, 5, 5, 5, 5, cv.BORDER_CONSTANT,value=[225,225,225])
+            for j in range(length[k]):
+                m, n = int(h/2+seq[k][j,1]*(h/2-1)),int(h/2+seq[k][j,0]*(h/2-1))
+                if seq[k][j,1] == 3:
+                    break
+                img[-m-3:-m+3,n-3:n+3,:] = np.zeros_like(img[-m-3:-m+3,n-3:n+3,:])
+                #print(img[:,int(seq[k][j,1]*h)+256,256+int(seq[k][j,0]*h)])
+
+            # 红色是入点
+            img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,0] = 0
+            img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,1] = 0
+            img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,2] = 200
+
+            #蓝色 出点方向
+            if esc[k][0] == 1:
+                img[-5:,:,0] = 200
+                img[-5:,:,1] = 0
+                img[-5:,:,2] = 0
+            elif esc[k][1] == 1:
+                img[:,:5,0] = 200
+                img[:,:5,1] = 0
+                img[:,:5,2] = 0
+            elif esc[k][2] == 1:
+                img[:5,:,0] = 200
+                img[:5,:,1] = 0
+                img[:5,:,2] = 0
+            elif esc[k][3] == 1:
+                img[:,-5:,0] = 200
+                img[:,-5:,1] = 0
+                img[:,-5:,2] = 0
+            print(str(i*32+k)+'.png')
+            cv.imwrite(os.path.join(save_dir,str(i*32+k)+'.png'),img)
+
+
+
+

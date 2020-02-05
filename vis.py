@@ -13,7 +13,7 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 
 
-def visualize(output_dir,imgs, seq, enter, esc, length, epoch):
+def visualize(output_dir,imgs, seq, seq_gt, enter, esc, length, epoch):
     """
     visualize a output of validation epoch
     
@@ -28,23 +28,26 @@ def visualize(output_dir,imgs, seq, enter, esc, length, epoch):
     imgs = imgs.cpu()
     seq = seq.cpu()
     enter = enter.cpu()
-    esc = esc.cpu().nonzero().tolist() # (b,2)
+    esc = esc.cpu()
+    esc_d = esc.nonzero().tolist() # (b,4)
     
-    direction = {0:'left', 1:'up', 2:'right', 3:'below'}
+    direction = {0:'below', 1:'left', 2:'up', 3:'right'}
     output_path = output_dir
     save_dir = output_path+'epoch_'+str(epoch)+'/'
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
     
-    for k in range(len(seq)):
+    for k in range((len(imgs))):
         img = imgs[k].numpy()
         c,w,h = img.shape
-        #img[0] = img[0]*0.229+0.485
-        #img[1] = img[1]*0.224+0.456
-        #img[2] = img[2]*0.225+0.406
+        img[0] = img[0]*0.229+0.485
+        img[1] = img[1]*0.224+0.456
+        img[2] = img[2]*0.225+0.406
         img = img * 255
-        img.astype(np.int)
-        img = img.transpose(1,2,0)
+        img.astype('int')
+        img = img.transpose(1,2,0) # chw -> hwc
+        img = img[...,::-1] #rgb --> bgr
+        #print(enter[k],esc[k])
         img = cv.copyMakeBorder(img, 5, 5, 5, 5, cv.BORDER_CONSTANT,value=[225,225,225])
         for j in range(length[k]):
             m, n = int(h/2+seq[k][j,1]*(h/2-1)),int(h/2+seq[k][j,0]*(h/2-1))
@@ -52,8 +55,39 @@ def visualize(output_dir,imgs, seq, enter, esc, length, epoch):
                 break
             img[-m-3:-m+3,n-3:n+3,:] = np.zeros_like(img[-m-3:-m+3,n-3:n+3,:])
             #print(img[:,int(seq[k][j,1]*h)+256,256+int(seq[k][j,0]*h)])
+        
+        di = direction[esc_d[k][1]]
+        
+        if seq_gt is not None:
+            for j in range(1,length[k]): # omit start point
+                m, n = int(h/2+seq_gt[k][j,1]*(h/2-1)),int(h/2+seq_gt[k][j,0]*(h/2-1))
+                if seq[k][j,1] == 3:
+                    break
+                img[-m-3:-m+3,n-3:n+3,:] = np.zeros_like(img[-m-3:-m+3,n-3:n+3,:]) + 100
+       
+        # 红色是入点
+        img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,0] = 0
+        img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,1] = 0
+        img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,2] = 200
 
-        img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,:] = np.full_like(img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,:],100)
-        di = direction[esc[k][1]]
+        #蓝色 出点方向
+        if esc[k][0] == 1:
+            img[-5:,:,0] = 200
+            img[-5:,:,1] = 0
+            img[-5:,:,2] = 0
+        elif esc[k][1] == 1:
+            img[:,:5,0] = 200
+            img[:,:5,1] = 0
+            img[:,:5,2] = 0
+        elif esc[k][2] == 1:
+            img[:5,:,0] = 200
+            img[:5,:,1] = 0
+            img[:5,:,2] = 0
+        elif esc[k][3] == 1:
+            img[:,-5:,0] = 200
+            img[:,-5:,1] = 0
+            img[:,-5:,2] = 0
+        #print(str(i*32+k)+'.png')
         
         cv.imwrite(os.path.join(save_dir,str(k)+'di-{}'.format(di)+'.png'),img)
+

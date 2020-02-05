@@ -27,14 +27,14 @@ encoder_lr = 1e-4  # learning rate for encoder if fine-tuning
 decoder_lr = 4e-4  # learning rate for decoder
 grad_clip = 5.  # clip gradients at an absolute value of
 alpha_c = 1.  # regularization parameter for 'doubly stochastic attention', as in the paper
-best_loss = 0.  # best loss score right now
+best_loss = 1.  # best loss score right now
 print_freq = 1  # print training/validation stats every __ batches
 fine_tune_encoder = False # fine-tune encoder?
 checkpoint = None  # path to checkpoint, None if none
 save_path = './checkpoint/' # checkpoint save path
 vis_dir = './vis/' # store visualized result
 
-max_len = 10 # the longest sequence
+max_len = 15 # the longest sequence
 
 def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_optimizer, epoch):
     """
@@ -63,7 +63,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
         imgs = data['image'].to(device) # (b,c,w,h)
         seq = data['seq'].to(device) # (b,max_len,2)
         enter = data['enter'].to(device) # (b,2)
-        esc = data['esc'].to(device) # (b,4)
+        esc = data['esc'].to(device) # (b,4) one-hot indicate four direction
         length = data['len'] # (b,1) it seem to be a 1D CPU int64 tensor when use pack_padded_sequence below
         
         #skip = [10,30,31,59,65,89]
@@ -173,8 +173,8 @@ def validate(val_loader, encoder, decoder, criterion):
             if i % print_freq == 0:
                 print('Validation: [{0}/{1}]\n'
                       'Batch Time {batch_time.val:.3f}s (Average:{batch_time.avg:.3f}s)\n'
-                      'Loss {loss.val:.4f} (Average:{loss.avg:.4f})\n'.format(i, len(val_loader), batch_time=batch_time,
-                                                                                loss=losses))
+                      'Loss {loss.val:.4f} (Average:{loss.avg:.4f})\n'.format(i, len(val_loader), batch_time=batch_time,loss=losses))
+                
     return losses.avg, imgs[sort_ind,:,:,:], pred, enter[sort_ind,:], esc[sort_ind,:], length[sort_ind,:]
 
 def main():
@@ -236,11 +236,11 @@ def main():
         loss, imgs, pred, enter, esc, length = validate(val_loader=val_loader,
                                     encoder=encoder, decoder=decoder, criterion=criterion)
         # visualize the last batch of validate epoch
-        visualize(vis_dir, imgs, pred, enter, esc, length, epoch)
+        visualize(vis_dir, imgs, pred, None, enter, esc, length, epoch)
 
         # Check if there was an improvement
-        is_best = loss > best_loss
-        best_loss = max(loss, best_loss)
+        is_best = loss < best_loss
+        best_loss = min(loss, best_loss)
         if not is_best:
             epochs_since_improvement += 1
             print("\nEpochs since last improvement: %d\n" % (epochs_since_improvement,))

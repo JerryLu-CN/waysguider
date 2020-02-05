@@ -25,7 +25,7 @@ def predict(checkpoint ,data_path, output_path):
     """
     prediction
     """
-    max_len = 10
+    max_len = 20
     batch_size = 32
 
     checkpoint = torch.load(checkpoint)
@@ -77,7 +77,8 @@ def predict(checkpoint ,data_path, output_path):
             output_dir = output_path + 'batch-{}/'.format(i)
             if not os.path.exists(output_dir):
                 os.mkdir(output_dir)
-            visualize(output_dir,imgs, predictions, enter, esc, length, 'pred')
+            visualize(output_dir,imgs, predictions, data['seq'], enter, esc, length, 'pred')
+            
 
 if __name__ == '__main__':
     predict(checkpoint ,data_path, output_path)
