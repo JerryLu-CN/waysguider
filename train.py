@@ -35,7 +35,7 @@ checkpoint = None  # path to checkpoint, None if none
 save_path = './checkpoint/' # checkpoint save path
 vis_dir = './vis/' # store visualized result
 
-max_len = 15 # the longest sequence
+max_len = 12 # the longest sequence
 
 def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_optimizer, epoch):
     """
@@ -80,16 +80,17 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
         # Forward prop.
         imgs = encoder(imgs) # encoder_out
-        pred, sort_ind, alphas, alphas_inv = decoder(imgs, enter, esc, seq[:,:-1,:], seq_inv[:,:-1,:], length-1)
+        pred, pred_inv,_ , sort_ind, alphas, alphas_inv = decoder(imgs, enter, esc, seq[:,:-1,:], seq_inv[:,:-1,:], length-1)
         # pred (b,max_len,2)
 
-        targets = seq[sort_ind,: ,:] # to the sorted version
+        targets = seq[sort_ind,1:,:] # to the sorted version
+        targets_inv = seq_inv[sort_ind,1:,:]
         # Remove timesteps that we didn't decode at, or are pads
         #pred = pack_padded_sequence(pred, length.squeeze(1), batch_first=True)
         #targets = pack_padded_sequence(targets, length.squeeze(1), batch_first=True)
 
         # Calculate loss
-        loss = criterion(pred, targets)
+        loss = criterion(pred, targets) + criterion(pred_inv, targets_inv)
         #loss += alpha_c * ((1. - alphas.sum(dim=1)) ** 2).mean()
 
         # Back prop.
@@ -154,16 +155,17 @@ def validate(val_loader, encoder, decoder, criterion):
             # Forward prop.
             if encoder is not None:
                 imgs_encode = encoder(imgs)
-            pred, sort_ind, alphas, alphas_inv = decoder(imgs_encode, enter, esc, seq[:,:-1,:], seq_inv[:,:-1,:], length - 1)
+            pred, pred_inv,predictions_assemble, sort_ind, alphas, alphas_inv = decoder(imgs_encode, enter, esc, seq[:,:-1,:], seq_inv[:,:-1,:], length - 1)
 
-            targets = seq[sort_ind,:,:]
+            targets = seq[sort_ind,1:,:]
+            targets_inv = seq_inv[sort_ind,1:,:]
 
-            pred_cal = pred.clone()
+            #pred_cal = pred.clone()
             #pred_cal = pack_padded_sequence(pred_cal, length.squeeze(1), batch_first=True)
             #targets = pack_padded_sequence(targets, length.squeeze(1), batch_first=True)
 
             # Calculate loss
-            loss = criterion(pred_cal, targets)
+            loss = criterion(pred, targets) + criterion(pred_inv, targets_inv)
 
             # Keep track of metrics
             losses.update(loss.item(),length.sum().item())
@@ -176,7 +178,7 @@ def validate(val_loader, encoder, decoder, criterion):
                       'Batch Time {batch_time.val:.3f}s (Average:{batch_time.avg:.3f}s)\n'
                       'Loss {loss.val:.4f} (Average:{loss.avg:.4f})\n'.format(i, len(val_loader), batch_time=batch_time,loss=losses))
                 
-    return losses.avg, imgs[sort_ind,:,:,:], pred, enter[sort_ind,:], esc[sort_ind,:], length[sort_ind,:]
+    return losses.avg, imgs[sort_ind,:,:,:], pred, predictions_assemble, enter[sort_ind,:], esc[sort_ind,:], length[sort_ind,:]
 
 def main():
     global epochs_since_improvement, checkpoint, start_epoch, fine_tune_encoder, best_loss, save_path, vis_dir, decoder_dim
@@ -208,7 +210,8 @@ def main():
     decoder = decoder.to(device)
     encoder = encoder.to(device)
 
-    criterion = nn.MSELoss().to(device)
+    #criterion = nn.MSELoss().to(device)
+    criterion = traj_loss().to(device)
 
     dataset = GuiderDataset(data_path,0.2,max_len=max_len)
     train_loader = Data.DataLoader(dataset.train_set(), batch_size=batch_size, shuffle=False)
@@ -234,10 +237,10 @@ def main():
               epoch=epoch)
 
         # One epoch's validation, return the average loss of each batch in this epoch
-        loss, imgs, pred, enter, esc, length = validate(val_loader=val_loader,
+        loss, imgs, pred, pred_vis, enter, esc, length = validate(val_loader=val_loader,
                                     encoder=encoder, decoder=decoder, criterion=criterion)
         # visualize the last batch of validate epoch
-        visualize(vis_dir, imgs, pred, None, enter, esc, length, epoch)
+        visualize(vis_dir, imgs, pred_vis, None, enter, esc, length, epoch)
 
         # Check if there was an improvement
         is_best = loss < best_loss

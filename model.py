@@ -202,9 +202,10 @@ class Decoder(nn.Module):
         h, c, h_inv, c_inv = self.init_hidden_state(encoder_out, enter, esc)  # (batch_size, decoder_dim)
 
         # Create tensors to hold two coordination predictions
-        predictions = torch.zeros((batch_size, sequence.shape[1] + 1, 2)).to(device)  # (b,max_len,2)
-        predictions_inv = torch.zeros((batch_size, sequence.shape[1] + 1, 2)).to(device)  # (b,max_len,2)
-
+        predictions = torch.zeros((batch_size, sequence.shape[1], 2)).to(device)  # (b,max_len(2~t),2)
+        predictions_inv = torch.zeros((batch_size, sequence.shape[1], 2)).to(device)  # (b,max_len,2)
+        predictions_assemble = torch.zeros((batch_size,sequence.shape[1]+1,2)).to(device)
+        
         alphas = torch.zeros((batch_size, sequence.shape[1], num_pixels)).to(device)
         alphas_inv = torch.zeros((batch_size, sequence.shape[1], num_pixels)).to(device)
 
@@ -242,17 +243,20 @@ class Decoder(nn.Module):
             
             preds = self.fc(self.dropout(h))  # (batch_size_t, 2)
             preds_inv = self.fc(self.dropout(h_inv))
-            predictions[:batch_size_t, t+1, :] = preds # (b,max_len,2)
-            predictions_inv[:batch_size_t, sequence.shape[1]-2-t,:] = preds_inv # inverse order
+            predictions[:batch_size_t, t, :] = preds # (b,max_len,2)
+            predictions_inv[:batch_size_t, t,:] = preds_inv # used to train model
+            predictions_assemble[:batch_size_t, sequence.shape[1]-1-t,:] # used to store a visualizable result
             alphas[:batch_size_t,t,:] = alpha # this is used to visualize(not implemented yet), and add regularization
             alphas_inv[:batch_size_t,t,:] = alpha_inv
             
-            predictions_inv = move_forward(predictions_inv, seq_len, device)
-            
+            # visualizable result
+            predictions_assemble = move_forward(predictions_assemble, seq_len, device)
+            predictions_assemble[:,1:,:] += predictions.data
+            predictions_assemble[:,1:-1,:] /= 2
             # a weights to be implemented
             #weights = torch.range(0.1,1,seq_len) ??
-            predictions = (predictions + predictions_inv) / 2.
-        return predictions, sort_ind, alphas, alphas_inv
+            #predictions = (predictions + predictions_inv) / 2.
+        return predictions, predictions_inv, predictions_assemble, sort_ind, alphas, alphas_inv
 
 
 # pretrain utils

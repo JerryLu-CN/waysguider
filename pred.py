@@ -4,6 +4,7 @@ import time
 import torch.utils.data as Data
 import torch.nn as nn
 import random
+import numpy as np
 from torch.nn.utils.rnn import pack_padded_sequence
 from model import Encoder, Decoder
 from dataset import *
@@ -17,15 +18,15 @@ torch.backends.cudnn.benchmark = True
 torch.manual_seed(0)
 torch.cuda.manual_seed(0)
 
-checkpoint = '/data/lzt/project/waysguider/checkpoint/checkpoint_best.pth'
+checkpoint = './checkpoint/checkpoint_best.pth'
 data_path = '/data/lzt/project/waysguider/dataset/'
-output_path = '/data/lzt/project/waysguider/pred_vis/'
+output_path = './pred_vis/'
 
 def predict(checkpoint ,data_path, output_path):
     """
     prediction
     """
-    max_len = 20
+    max_len = 8
     batch_size = 32
 
     checkpoint = torch.load(checkpoint)
@@ -63,7 +64,7 @@ def predict(checkpoint ,data_path, output_path):
             predictions_inv = torch.zeros((batch_size,max_len,2)).to(device)  # (b,max_len,2)
 
             predictions[:,0,:] = enter
-            prediction_inv[:,max_len-1,:] = esc
+            predictions_inv[:,max_len-1,:] = esc
 
             for t in range(max_len):
                 h_a = torch.cat([h,h_inv],dim=1)
@@ -82,17 +83,39 @@ def predict(checkpoint ,data_path, output_path):
                     torch.cat([decoder.position_embedding(predictions[:,t,:]),attention_weighted_encoding],dim=1),
                     (h_a, c_a))  # (batch_size_t, decoder_dim)
                 
-                h_inv, c_inv = ecoder.decoder(
+                h_inv, c_inv = decoder.decoder(
                     torch.cat([decoder.position_embedding(predictions_inv[:,max_len-1-t,:]),attention_weighted_encoding_inv],dim=1),
                     (h_b, c_b))
+                
+                h = decoder.trans_h(h)
+                c = decoder.trans_c(c)
+                h_inv = decoder.trans_h(h_inv)
+                c_inv = decoder.trans_c(c_inv)
                 
                 preds = decoder.fc(decoder.dropout(h))  # (batch_size_t, 2)
                 preds_inv = decoder.fc(decoder.dropout(h_inv))
                 if t < max_len - 1:
                     predictions[:, t + 1, :] = preds # (b,max_len,2)
                     predictions_inv[:, max_len-2-t,:] = preds_inv
-                
-                predictions = (predictions + predictions_inv) / 2.
+            
+            ## weight scheme 1
+            #first_part = [1]*int(max_len/2)
+            #second_part = [0]*(max_len - int(max_len/2))
+            #weights = np.array(first_part + second_part)
+            #weights_inv = np.array(second_part + first_part)
+            
+            ## weight scheme 2
+            weights = np.array([_ for _ in range(max_len)])
+            weights = np.exp(-weights)
+            weights_inv = weights[::-1]
+            weights = np.vstack([weights,weights_inv])
+            weights /= weights.sum(axis=0)
+            weights_inv = weights[1,:]
+            weights = weights[0,:]
+            
+            weights = torch.tensor(weights,dtype=torch.float).to(device).unsqueeze(0).unsqueeze(2)
+            weights_inv = torch.tensor(weights_inv, dtype=torch.float).to(device).unsqueeze(0).unsqueeze(2)
+            predictions = (predictions * weights + predictions_inv * weights_inv)
             
             output_dir = output_path + 'batch-{}/'.format(i)
             if not os.path.exists(output_dir):

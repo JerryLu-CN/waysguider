@@ -55,7 +55,7 @@ def visualize(output_dir,imgs, seq, seq_gt, enter, esc, length, epoch):
             #print(img[:,int(seq[k][j,1]*h)+256,256+int(seq[k][j,0]*h)])
         
         if seq_gt is not None:
-            for j in range(1,length[k]): # omit start point
+            for j in range(1,length[k]-1): # omit start point
                 m, n = int(h/2+seq_gt[k][j,1]*(h/2-1)),int(h/2+seq_gt[k][j,0]*(h/2-1))
                 if seq[k][j,1] == 3:
                     break

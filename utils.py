@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 
 class AverageMeter(object):
     """
@@ -111,3 +112,23 @@ def move_forward(pred_inv, seq_lens, device):
         cache[i,:seq_len+1,:] = pred_inv[i,max_len - seq_len - 1:,:]
     
     return cache
+
+class traj_loss(nn.Module):
+    def __init__(self, size_average=None, reduce=None, reduction='mean'):
+        super(traj_loss, self).__init__()
+        self.criterion = nn.MSELoss(size_average,reduce,reduction)
+
+    def forward(self, pred, target):
+        target = target[:,:,:]
+        length = pred.size(1)
+        # w = e ^ (1 - index / length)
+        # 
+        weight = torch.tensor([(length-i)/length for i in range(length)])
+        weight = torch.exp(weight)
+        weight /= weight.sum()
+        # 每一个点分别算mse，之后累加得到加权loss
+        loss = self.criterion(pred[:,0,:], target[:,0,:])*weight[0]
+        for n in range(1, length):
+            loss = loss + self.criterion(pred[:,n,:], target[:,n,:])*weight[n]
+        loss /= length
+        return loss
