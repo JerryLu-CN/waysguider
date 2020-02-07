@@ -82,7 +82,7 @@ class Attention(nn.Module):
         """
         super(Attention, self).__init__()
         self.encoder_att = nn.Linear(encoder_dim, attention_dim)  # linear layer to transform encoded image
-        self.decoder_att = nn.Linear(decoder_dim, attention_dim)  # linear layer to transform decoder's output
+        self.decoder_att = nn.Linear(decoder_dim*2, attention_dim)  # linear layer to transform decoder's output
         self.full_att = nn.Linear(attention_dim, 1)  # linear layer to calculate values to be softmax-ed
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax(dim=1)  # softmax layer to calculate weights
@@ -125,11 +125,15 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
         # 这里有个问题，位置信息是否需要先做embedding？
         self.position_embedding = nn.Linear(2,self.position_embedding_dim)
-        self.decoder = nn.LSTMCell(self.position_embedding_dim + self.encoder_size, decoder_dim,bias=True) # 2 indicates (X,Y)
-        self.init_condition = nn.Linear(6, condition_dim)
+        self.decoder = nn.LSTMCell(self.position_embedding_dim + self.encoder_size, decoder_dim*2, bias=True) # 2 indicates (X,Y)
+        self.decoder_inv = nn.LSTMCell(self.position_embedding_dim + self.encoder_size, decoder_dim*2, bias=True) # 2 indicates (X,Y)
+        self.trans_h = nn.Linear(decoder_dim*2, decoder_dim)
+        self.trans_c = nn.Linear(decoder_dim*2, decoder_dim)
+
+        self.init_condition = nn.Linear(4, condition_dim)
         self.init_h = nn.Linear(encoder_size + condition_dim, decoder_dim)
         self.init_c = nn.Linear(encoder_size + condition_dim, decoder_dim)
-        self.f_beta = nn.Linear(decoder_dim, encoder_size)
+        self.f_beta = nn.Linear(decoder_dim*2, encoder_size)
         self.sigmoid= nn.Sigmoid()
         self.fc = nn.Linear(decoder_dim, 2) # regression question
         self.init_weights()
@@ -151,15 +155,19 @@ class Decoder(nn.Module):
         :return: hidden state, cell state
         """
 
-        flat_encoder_out = encoder_out.view(encoder_out.shape[0],-1) # (batch_size, 16*16)
-        condition = torch.cat([enter,esc],dim=1) # (batch_size,6)
+        flat_encoder_out = encoder_out.view(encoder_out.shape[0],-1) # (batch_size, 64*64)
+        condition = torch.cat([enter,esc],dim=1) # (batch_size,4)
+        condition_inv = torch.cat([esc,enter],dim=1)
         condition_embedding = self.init_condition(condition)  # (batch_size,condition_dim)
+        condition_embedding_inv = self.init_condition(condition_inv)
 
         h = self.init_h(torch.cat([flat_encoder_out,condition_embedding],dim=1)) # (batch_size, decoder_dim)
+        h_inv = self.init_h(torch.cat([flat_encoder_out,condition_embedding_inv],dim=1))
         c = self.init_c(torch.cat([flat_encoder_out,condition_embedding],dim=1))
-        return h, c
+        c_inv = self.init_c(torch.cat([flat_encoder_out,condition_embedding_inv],dim=1))
+        return h, c, h_inv, c_inv
 
-    def forward(self, encoder_out, enter, esc, sequence, seq_len):
+    def forward(self, encoder_out, enter, esc, sequence, sequence_inv, seq_len):
         """
         Forward propagation.
 
@@ -182,34 +190,63 @@ class Decoder(nn.Module):
         seq_len, sort_ind = seq_len.squeeze(1).sort(dim=0, descending=True)
         encoder_out = encoder_out[sort_ind,:,:]
         sequence = sequence[sort_ind,:,:]
+        sequence_inv = sequence_inv[sort_ind,:,:]
 
         # position embedding ???
         sequence =  self.position_embedding(sequence) # (b,max_len,position_embedding_dim)
+        sequence_inv = self.position_embedding(sequence_inv)
 
         # Initialize LSTM state
-        h, c = self.init_hidden_state(encoder_out, enter, esc)  # (batch_size, decoder_dim)
+        h, c, h_inv, c_inv = self.init_hidden_state(encoder_out, enter, esc)  # (batch_size, decoder_dim)
 
         # Create tensors to hold two coordination predictions
-        predictions = torch.zeros((batch_size, sequence.shape[1],2)).to(device)  # (b,max_len,2)
+        predictions = torch.zeros((batch_size, sequence.shape[1] + 1, 2)).to(device)  # (b,max_len,2)
+        predictions_inv = torch.zeros((batch_size, sequence.shape[1] + 1, 2)).to(device)  # (b,max_len,2)
+
         alphas = torch.zeros((batch_size, sequence.shape[1], num_pixels)).to(device)
+        alphas_inv = torch.zeros((batch_size, sequence.shape[1], num_pixels)).to(device)
 
         # At each time-step, decode by
         # attention-weighing the encoder's output based on the decoder's previous hidden state output
         # then generate a new coordinate in the decoder with the previous word and the attention weighted encoding
         for t in range(sequence.shape[1]):
+            h_a = torch.cat([h,h_inv],dim=1)
+            h_b = torch.cat([h_inv,h],dim=1)
+            c_a = torch.cat([c,c_inv],dim=1)
+            c_b = torch.cat([c_inv,c],dim=1)
+            
             batch_size_t = sum([l > t for l in seq_len])
             attention_weighted_encoding, alpha = self.attention(encoder_out[:batch_size_t],
-                                                                h[:batch_size_t]) #(b,e_size) (b,e_size)
-            gate = self.sigmoid(self.f_beta(h[:batch_size_t]))
+                                                                h_a[:batch_size_t]) #(b,e_size) (b,e_size)
+            attention_weighted_encoding_inv, alpha_inv = self.attention(encoder_out[:batch_size_t],
+                                                                h_b[:batch_size_t])
+            gate = self.sigmoid(self.f_beta(h_a[:batch_size_t]))            
+            gate_inv = self.sigmoid(self.f_beta(h_b[:batch_size_t]))
+
             attention_weighted_encoding = gate * attention_weighted_encoding
+            attention_weighted_encoding_inv = gate_inv * attention_weighted_encoding_inv
+            
             h, c = self.decoder(
                 torch.cat([sequence[:batch_size_t,t,:],attention_weighted_encoding],dim=1),
-                (h[:batch_size_t,:], c[:batch_size_t,:]))  # (batch_size_t, decoder_dim)
-            preds = self.fc(self.dropout(h))  # (batch_size_t, 2)
-            predictions[:batch_size_t, t, :] = preds # (b,max_len,2)
-            alphas[:batch_size_t,t,:] = alpha # this is used to visualize(not implemented yet), and add regularization
+                (h_a[:batch_size_t,:], c_a[:batch_size_t,:]))  # (batch_size_t, decoder_dim)
+            h_inv, c_inv = self.decoder_inv(
+                torch.cat([sequence_inv[:batch_size_t,t,:],attention_weighted_encoding_inv],dim=1),
+                (h_b[:batch_size_t,:], c_b[:batch_size_t,:]))
 
-        return predictions, sort_ind, alphas
+            h = self.trans_h(h)
+            c = self.trans_c(c)
+            h_inv = self.trans_h(h_inv)
+            c_inv = self.trans_c(c_inv)
+            
+            preds = self.fc(self.dropout(h))  # (batch_size_t, 2)
+            preds_inv = self.fc(self.dropout(h_inv))
+            predictions[:batch_size_t, t+1, :] = preds # (b,max_len,2)
+            predictions_inv[:batch_size_t, sequence.shape[1]-2-t,:] = preds_inv # inverse order
+            alphas[:batch_size_t,t,:] = alpha # this is used to visualize(not implemented yet), and add regularization
+            alphas_inv[:batch_size_t,t,:] = alpha_inv
+            
+            predictions = (predictions + predictions_inv) / 2.
+        return predictions, sort_ind, alphas, alphas_inv
 
 # descriminator
 class Descriminator(nn.Module):

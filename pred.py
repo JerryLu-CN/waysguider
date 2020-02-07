@@ -43,7 +43,7 @@ def predict(checkpoint ,data_path, output_path):
             # Move to device, if available
             imgs = data['image'].to(device)  # (b,c,w,h)
             enter = data['enter'].to(device)  # (b,2)
-            esc = data['esc'].to(device) # (b,4)
+            esc = data['esc'].to(device) # (b,2)
             length = torch.full((batch_size,1),max_len,dtype=torch.long)
 
             encoder_out = encoder(imgs)
@@ -56,23 +56,43 @@ def predict(checkpoint ,data_path, output_path):
             num_pixels = encoder_out.size(1) # for attention. not useful at the moment
 
             # Initialize LSTM state
-            h, c = decoder.init_hidden_state(encoder_out, enter, esc)  # (batch_size, decoder_dim)
-
+            h, c, h_inv, c_inv = decoder.init_hidden_state(encoder_out, enter, esc)
+            
             # Create tensors to hold two coordination predictions
             predictions = torch.zeros((batch_size,max_len,2)).to(device)  # (b,max_len,2)
-            predictions[:,0,:] = enter
+            predictions_inv = torch.zeros((batch_size,max_len,2)).to(device)  # (b,max_len,2)
 
+            predictions[:,0,:] = enter
+            prediction_inv[:,max_len-1,:] = esc
 
             for t in range(max_len):
-                attention_weighted_encoding, alpha = decoder.attention(encoder_out,h)
-                gate = decoder.sigmoid(decoder.f_beta(h))
+                h_a = torch.cat([h,h_inv],dim=1)
+                h_b = torch.cat([h_inv,h],dim=1)
+                c_a = torch.cat([c,c_inv],dim=1)
+                c_b = torch.cat([c_inv,c],dim=1)
+                
+                attention_weighted_encoding, alpha = decoder.attention(encoder_out,h_a)
+                attention_weighted_encoding_inv, alpha_inv = decoder.attention(encoder_out,h_b)
+                gate = decoder.sigmoid(decoder.f_beta(h_a))
+                gate_inv = decoder.sigmoid(decoder.f_beta(h_b))
                 attention_weighted_encoding = gate * attention_weighted_encoding
+                attention_weighted_encoding_inv = gate_inv * attention_weighted_encoding_inv
+            
                 h, c = decoder.decoder(
                     torch.cat([decoder.position_embedding(predictions[:,t,:]),attention_weighted_encoding],dim=1),
-                    (h, c))  # (batch_size_t, decoder_dim)
+                    (h_a, c_a))  # (batch_size_t, decoder_dim)
+                
+                h_inv, c_inv = ecoder.decoder(
+                    torch.cat([decoder.position_embedding(predictions_inv[:,max_len-1-t,:]),attention_weighted_encoding_inv],dim=1),
+                    (h_b, c_b))
+                
                 preds = decoder.fc(decoder.dropout(h))  # (batch_size_t, 2)
+                preds_inv = decoder.fc(decoder.dropout(h_inv))
                 if t < max_len - 1:
                     predictions[:, t + 1, :] = preds # (b,max_len,2)
+                    predictions_inv[:, max_len-2-t,:] = preds_inv
+                
+                predictions = (predictions + predictions_inv) / 2.
             
             output_dir = output_path + 'batch-{}/'.format(i)
             if not os.path.exists(output_dir):

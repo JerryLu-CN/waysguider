@@ -63,6 +63,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
         img_name = data['name']
         imgs = data['image'].to(device) # (b,c,w,h)
         seq = data['seq'].to(device) # (b,max_len,2)
+        seq_inv = data['seq_inv'].to(device)
         enter = data['enter'].to(device) # (b,2)
         esc = data['esc'].to(device) # (b,4) one-hot indicate four direction
         length = data['len'] # (b,1) it seem to be a 1D CPU int64 tensor when use pack_padded_sequence below
@@ -79,11 +80,10 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
         # Forward prop.
         imgs = encoder(imgs) # encoder_out
-        pred, sort_ind, alphas = decoder(imgs, enter, esc, seq[:,:-1,:], length-1)
+        pred, sort_ind, alphas, alphas_inv = decoder(imgs, enter, esc, seq[:,:-1,:], seq_inv[:,:-1,:], length-1)
         # pred (b,max_len,2)
 
-        targets = seq[sort_ind,1:,:] # to the sorted version
-        length = length[sort_ind,:] - 1
+        targets = seq[sort_ind,: ,:] # to the sorted version
         # Remove timesteps that we didn't decode at, or are pads
         #pred = pack_padded_sequence(pred, length.squeeze(1), batch_first=True)
         #targets = pack_padded_sequence(targets, length.squeeze(1), batch_first=True)
@@ -146,6 +146,7 @@ def validate(val_loader, encoder, decoder, criterion):
                 continue
             imgs = data['image'].to(device)  # (b,c,w,h)
             seq = data['seq'].to(device)  # (b,max_len,2)
+            seq_inv = data['seq_inv'].to(device)
             enter = data['enter'].to(device)  # (b,2)
             esc = data['esc'].to(device)  # (b,4)
             length = data['len']  # (b,1)  it seem to be a 1D CPU int64 tensor
@@ -153,10 +154,9 @@ def validate(val_loader, encoder, decoder, criterion):
             # Forward prop.
             if encoder is not None:
                 imgs_encode = encoder(imgs)
-            pred, sort_ind, alphas = decoder(imgs_encode, enter, esc, seq[:,:-1,:], length - 1)
+            pred, sort_ind, alphas, alphas_inv = decoder(imgs_encode, enter, esc, seq[:,:-1,:], seq_inv[:,:-1,:], length - 1)
 
-            targets = seq[sort_ind,1:,:]
-            length = length[sort_ind,:] - 1
+            targets = seq[sort_ind,:,:]
 
             pred_cal = pred.clone()
             #pred_cal = pack_padded_sequence(pred_cal, length.squeeze(1), batch_first=True)

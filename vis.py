@@ -21,7 +21,7 @@ def visualize(output_dir,imgs, seq, seq_gt, enter, esc, length, epoch):
     :param imgs: torch GPU Tensor of (b,c,w,h)
     :param seq: torch GPU Tensor of (b,max_len,2)
     :param enter: (b,2)
-    :param esc: (b,4)
+    :param esc: (b,2)
     :param length: (b,1)
     """
 
@@ -29,9 +29,7 @@ def visualize(output_dir,imgs, seq, seq_gt, enter, esc, length, epoch):
     seq = seq.cpu()
     enter = enter.cpu()
     esc = esc.cpu()
-    esc_d = esc.nonzero().tolist() # (b,4)
-    
-    direction = {0:'below', 1:'left', 2:'up', 3:'right'}
+
     output_path = output_dir
     save_dir = output_path+'epoch_'+str(epoch)+'/'
     if not os.path.exists(save_dir):
@@ -56,8 +54,6 @@ def visualize(output_dir,imgs, seq, seq_gt, enter, esc, length, epoch):
             img[-m-3:-m+3,n-3:n+3,:] = np.zeros_like(img[-m-3:-m+3,n-3:n+3,:])
             #print(img[:,int(seq[k][j,1]*h)+256,256+int(seq[k][j,0]*h)])
         
-        di = direction[esc_d[k][1]]
-        
         if seq_gt is not None:
             for j in range(1,length[k]): # omit start point
                 m, n = int(h/2+seq_gt[k][j,1]*(h/2-1)),int(h/2+seq_gt[k][j,0]*(h/2-1))
@@ -69,25 +65,31 @@ def visualize(output_dir,imgs, seq, seq_gt, enter, esc, length, epoch):
         img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,0] = 0
         img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,1] = 0
         img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,2] = 200
-
+        
+        # 蓝色是出点
+        img[-int(h/2+esc[k][1]*(h/2-1))-3:-int(h/2+esc[k][1]*(h/2-1))+3,int(h/2+esc[k][0]*(h/2-1))-3:int(h/2+esc[k][0]*(h/2-1))+3,0] = 200
+        img[-int(h/2+esc[k][1]*(h/2-1))-3:-int(h/2+esc[k][1]*(h/2-1))+3,int(h/2+esc[k][0]*(h/2-1))-3:int(h/2+esc[k][0]*(h/2-1))+3,1] = 0
+        img[-int(h/2+esc[k][1]*(h/2-1))-3:-int(h/2+esc[k][1]*(h/2-1))+3,int(h/2+esc[k][0]*(h/2-1))-3:int(h/2+esc[k][0]*(h/2-1))+3,2] = 0
+        
         #蓝色 出点方向
-        if esc[k][0] == 1:
-            img[-5:,:,0] = 200
-            img[-5:,:,1] = 0
-            img[-5:,:,2] = 0
-        elif esc[k][1] == 1:
-            img[:,:5,0] = 200
-            img[:,:5,1] = 0
-            img[:,:5,2] = 0
-        elif esc[k][2] == 1:
-            img[:5,:,0] = 200
-            img[:5,:,1] = 0
-            img[:5,:,2] = 0
-        elif esc[k][3] == 1:
-            img[:,-5:,0] = 200
-            img[:,-5:,1] = 0
-            img[:,-5:,2] = 0
+        
+        #if esc[k][0] == 1:
+        #    img[-5:,:,0] = 200
+        #    img[-5:,:,1] = 0
+        #    img[-5:,:,2] = 0
+        #elif esc[k][1] == 1:
+        #    img[:,:5,0] = 200
+        #    img[:,:5,1] = 0
+        #    img[:,:5,2] = 0
+        #elif esc[k][2] == 1:
+        #    img[:5,:,0] = 200
+        #    img[:5,:,1] = 0
+        #    img[:5,:,2] = 0
+        #elif esc[k][3] == 1:
+        #    img[:,-5:,0] = 200
+        #    img[:,-5:,1] = 0
+        #    img[:,-5:,2] = 0
         #print(str(i*32+k)+'.png')
         
-        cv.imwrite(os.path.join(save_dir,str(k)+'di-{}'.format(di)+'.png'),img)
+        cv.imwrite(os.path.join(save_dir,str(k)+'.png'),img)
 

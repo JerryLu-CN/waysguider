@@ -71,3 +71,29 @@ def save_checkpoint(save_dir, epoch, epochs_since_improvement, encoder, decoder,
     if is_best:
         filename = save_dir +'checkpoint_' + 'best.pth'
         torch.save(state, filename)
+        
+def cal_direction(point):
+    '''
+    give out the closest direction of the sequnce final point
+    :param: point should be a list
+    :output: direction dim = 4
+        x+y   | x-y | direction
+        +     | +   | 3  right
+        +     | -   | 2  up
+        -     | +   | 0  below
+        -     | -   | 1  left
+    '''
+    a = point[0] + point[1]
+    b = point[0] - point[1]
+
+    if a > 0 and b > 0:
+        di = 3
+    elif a > 0 and b <= 0:
+        di = 2
+    elif a <= 0 and b > 0:
+        di = 0
+    else:
+        di = 1
+    direction = [0,0,0,0]
+    direction[di] = 1
+    return direction
