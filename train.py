@@ -66,7 +66,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
         seq_inv = data['seq_inv'].to(device)
         enter = data['enter'].to(device) # (b,2)
         esc = data['esc'].to(device) # (b,4) one-hot indicate four direction
-        length = data['len'] # (b,1) it seem to be a 1D CPU int64 tensor when use pack_padded_sequence below
+        length = data['len'] # (b) it seem to be a 1D CPU int64 tensor when use pack_padded_sequence below
         
         #skip = [10,30,31,59,65,89]
         #if i in skip:
@@ -149,7 +149,7 @@ def validate(val_loader, encoder, decoder, criterion):
             seq_inv = data['seq_inv'].to(device)
             enter = data['enter'].to(device)  # (b,2)
             esc = data['esc'].to(device)  # (b,4)
-            length = data['len']  # (b,1)  it seem to be a 1D CPU int64 tensor
+            length = data['len']  # (b)  it seem to be a 1D CPU int64 tensor
 
             # Forward prop.
             if encoder is not None:

@@ -4,6 +4,7 @@ import torch.nn as nn
 import torchvision
 from torchvision import models
 from torchvision.models.vgg import VGG
+from utils import *
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -136,6 +137,7 @@ class Decoder(nn.Module):
         self.f_beta = nn.Linear(decoder_dim*2, encoder_size)
         self.sigmoid= nn.Sigmoid()
         self.fc = nn.Linear(decoder_dim, 2) # regression question
+        
         self.init_weights()
 
     def init_weights(self):
@@ -175,7 +177,7 @@ class Decoder(nn.Module):
         :param enter: enter point (b,2)
         :param esc: escape point (b,2)
         :param sequence: coodination sequence (batch_size, max_seq_len, 2)
-        :param seq_len: sequence length (batch_size, 1)
+        :param seq_len: sequence length (batch_size)
         :return: scores for vocabulary, sorted encoded captions, decode lengths, weights, sort indices
         """
 
@@ -245,16 +247,12 @@ class Decoder(nn.Module):
             alphas[:batch_size_t,t,:] = alpha # this is used to visualize(not implemented yet), and add regularization
             alphas_inv[:batch_size_t,t,:] = alpha_inv
             
+            predictions_inv = move_forward(predictions_inv, seq_len, device)
+            
+            # a weights to be implemented
+            #weights = torch.range(0.1,1,seq_len) ??
             predictions = (predictions + predictions_inv) / 2.
         return predictions, sort_ind, alphas, alphas_inv
-
-# descriminator
-class Descriminator(nn.Module):
-    def __init__(self):
-        super().__init__()
-        pass
-
-# gan utils
 
 
 # pretrain utils
