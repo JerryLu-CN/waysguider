@@ -119,15 +119,15 @@ class Decoder(nn.Module):
         self.position_embedding_dim = position_dim  # 位置embedding？
         self.condition_dim = condition_dim # enter point coordination / esc direction
         self.decoder_dim = decoder_dim
-        self.attention_dim = attention_dim
+        #self.attention_dim = attention_dim
 
-        self.attention = Attention(encoder_dim,decoder_dim,attention_dim)
+        #self.attention = Attention(encoder_dim,decoder_dim,attention_dim)
 
         self.dropout = nn.Dropout(p=dropout)
         # 这里有个问题，位置信息是否需要先做embedding？
-        self.position_embedding = nn.Linear(2,self.position_embedding_dim)
-        self.decoder = nn.LSTMCell(self.position_embedding_dim + self.encoder_size, decoder_dim*2, bias=True) # 2 indicates (X,Y)
-        self.decoder_inv = nn.LSTMCell(self.position_embedding_dim + self.encoder_size, decoder_dim*2, bias=True) # 2 indicates (X,Y)
+        #self.position_embedding = nn.Linear(2,self.position_embedding_dim)
+        self.decoder = nn.LSTMCell(2, decoder_dim*2, bias=True) # 2 indicates (X,Y)
+        self.decoder_inv = nn.LSTMCell(2, decoder_dim*2, bias=True) # 2 indicates (X,Y)
         self.trans_h = nn.Linear(decoder_dim*2, decoder_dim)
         self.trans_c = nn.Linear(decoder_dim*2, decoder_dim)
 
@@ -195,8 +195,8 @@ class Decoder(nn.Module):
         sequence_inv = sequence_inv[sort_ind,:,:]
 
         # position embedding ???
-        sequence =  self.position_embedding(sequence) # (b,max_len,position_embedding_dim)
-        sequence_inv = self.position_embedding(sequence_inv)
+        #sequence =  self.position_embedding(sequence) # (b,max_len,position_embedding_dim)
+        #sequence_inv = self.position_embedding(sequence_inv)
 
         # Initialize LSTM state
         h, c, h_inv, c_inv = self.init_hidden_state(encoder_out, enter, esc)  # (batch_size, decoder_dim)
@@ -206,8 +206,8 @@ class Decoder(nn.Module):
         predictions_inv = torch.zeros((batch_size, sequence.shape[1], 2)).to(device)  # (b,max_len,2)
         predictions_assemble = torch.zeros((batch_size,sequence.shape[1]+1,2)).to(device)
         
-        alphas = torch.zeros((batch_size, sequence.shape[1], num_pixels)).to(device)
-        alphas_inv = torch.zeros((batch_size, sequence.shape[1], num_pixels)).to(device)
+        #alphas = torch.zeros((batch_size, sequence.shape[1], num_pixels)).to(device)
+        #alphas_inv = torch.zeros((batch_size, sequence.shape[1], num_pixels)).to(device)
 
         # At each time-step, decode by
         # attention-weighing the encoder's output based on the decoder's previous hidden state output
@@ -219,21 +219,21 @@ class Decoder(nn.Module):
             c_b = torch.cat([c_inv,c],dim=1)
             
             batch_size_t = sum([l > t for l in seq_len])
-            attention_weighted_encoding, alpha = self.attention(encoder_out[:batch_size_t],
-                                                                h_a[:batch_size_t]) #(b,e_size) (b,e_size)
-            attention_weighted_encoding_inv, alpha_inv = self.attention(encoder_out[:batch_size_t],
-                                                                h_b[:batch_size_t])
-            gate = self.sigmoid(self.f_beta(h_a[:batch_size_t]))            
-            gate_inv = self.sigmoid(self.f_beta(h_b[:batch_size_t]))
+            #attention_weighted_encoding, alpha = self.attention(encoder_out[:batch_size_t],
+            #                                                    h_a[:batch_size_t]) #(b,e_size) (b,e_size)
+            #attention_weighted_encoding_inv, alpha_inv = self.attention(encoder_out[:batch_size_t],
+            #                                                    h_b[:batch_size_t])
+            #gate = self.sigmoid(self.f_beta(h_a[:batch_size_t]))            
+            #gate_inv = self.sigmoid(self.f_beta(h_b[:batch_size_t]))
 
-            attention_weighted_encoding = gate * attention_weighted_encoding
-            attention_weighted_encoding_inv = gate_inv * attention_weighted_encoding_inv
+            #attention_weighted_encoding = gate * attention_weighted_encoding
+            #attention_weighted_encoding_inv = gate_inv * attention_weighted_encoding_inv
             
             h, c = self.decoder(
-                torch.cat([sequence[:batch_size_t,t,:],attention_weighted_encoding],dim=1),
+                sequence[:batch_size_t,t,:],
                 (h_a[:batch_size_t,:], c_a[:batch_size_t,:]))  # (batch_size_t, decoder_dim)
             h_inv, c_inv = self.decoder_inv(
-                torch.cat([sequence_inv[:batch_size_t,t,:],attention_weighted_encoding_inv],dim=1),
+                sequence_inv[:batch_size_t,t,:],
                 (h_b[:batch_size_t,:], c_b[:batch_size_t,:]))
 
             h = self.trans_h(h)
@@ -246,8 +246,8 @@ class Decoder(nn.Module):
             predictions[:batch_size_t, t, :] = preds # (b,max_len,2)
             predictions_inv[:batch_size_t, t,:] = preds_inv # used to train model
             predictions_assemble[:batch_size_t, sequence.shape[1]-1-t,:] # used to store a visualizable result
-            alphas[:batch_size_t,t,:] = alpha # this is used to visualize(not implemented yet), and add regularization
-            alphas_inv[:batch_size_t,t,:] = alpha_inv
+            #alphas[:batch_size_t,t,:] = alpha # this is used to visualize(not implemented yet), and add regularization
+            #alphas_inv[:batch_size_t,t,:] = alpha_inv
             
             # visualizable result
             predictions_assemble = move_forward(predictions_assemble, seq_len, device)
@@ -256,7 +256,8 @@ class Decoder(nn.Module):
             # a weights to be implemented
             #weights = torch.range(0.1,1,seq_len) ??
             #predictions = (predictions + predictions_inv) / 2.
-        return predictions, predictions_inv, predictions_assemble, sort_ind, alphas, alphas_inv
+        return predictions, predictions_inv, predictions_assemble, sort_ind, 
+#alphas, alphas_inv
 
 
 # pretrain utils

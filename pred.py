@@ -72,19 +72,19 @@ def predict(checkpoint ,data_path, output_path):
                 c_a = torch.cat([c,c_inv],dim=1)
                 c_b = torch.cat([c_inv,c],dim=1)
                 
-                attention_weighted_encoding, alpha = decoder.attention(encoder_out,h_a)
-                attention_weighted_encoding_inv, alpha_inv = decoder.attention(encoder_out,h_b)
-                gate = decoder.sigmoid(decoder.f_beta(h_a))
-                gate_inv = decoder.sigmoid(decoder.f_beta(h_b))
-                attention_weighted_encoding = gate * attention_weighted_encoding
-                attention_weighted_encoding_inv = gate_inv * attention_weighted_encoding_inv
+                #attention_weighted_encoding, alpha = decoder.attention(encoder_out,h_a)
+                #attention_weighted_encoding_inv, alpha_inv = decoder.attention(encoder_out,h_b)
+                #gate = decoder.sigmoid(decoder.f_beta(h_a))
+                #gate_inv = decoder.sigmoid(decoder.f_beta(h_b))
+                #attention_weighted_encoding = gate * attention_weighted_encoding
+                #attention_weighted_encoding_inv = gate_inv * attention_weighted_encoding_inv
             
                 h, c = decoder.decoder(
-                    torch.cat([decoder.position_embedding(predictions[:,t,:]),attention_weighted_encoding],dim=1),
+                    predictions[:,t,:],
                     (h_a, c_a))  # (batch_size_t, decoder_dim)
                 
                 h_inv, c_inv = decoder.decoder(
-                    torch.cat([decoder.position_embedding(predictions_inv[:,max_len-1-t,:]),attention_weighted_encoding_inv],dim=1),
+                    predictions_inv[:,max_len-1-t,:],
                     (h_b, c_b))
                 
                 h = decoder.trans_h(h)

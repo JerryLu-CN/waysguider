@@ -80,7 +80,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
         # Forward prop.
         imgs = encoder(imgs) # encoder_out
-        pred, pred_inv,_ , sort_ind, alphas, alphas_inv = decoder(imgs, enter, esc, seq[:,:-1,:], seq_inv[:,:-1,:], length-1)
+        pred, pred_inv,_ , sort_ind = decoder(imgs, enter, esc, seq[:,:-1,:], seq_inv[:,:-1,:], length-1)
         # pred (b,max_len,2)
 
         targets = seq[sort_ind,1:,:] # to the sorted version
@@ -155,7 +155,7 @@ def validate(val_loader, encoder, decoder, criterion):
             # Forward prop.
             if encoder is not None:
                 imgs_encode = encoder(imgs)
-            pred, pred_inv,predictions_assemble, sort_ind, alphas, alphas_inv = decoder(imgs_encode, enter, esc, seq[:,:-1,:], seq_inv[:,:-1,:], length - 1)
+            pred, pred_inv,predictions_assemble, sort_ind = decoder(imgs_encode, enter, esc, seq[:,:-1,:], seq_inv[:,:-1,:], length - 1)
 
             targets = seq[sort_ind,1:,:]
             targets_inv = seq_inv[sort_ind,1:,:]
