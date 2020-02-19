@@ -67,7 +67,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
         enter = data['enter'].to(device) # (b,2)
         esc = data['esc'].to(device) # (b,4) one-hot indicate four direction
         length = data['len'] # (b) it seem to be a 1D CPU int64 tensor when use pack_padded_sequence below
-        
+
         #skip = [10,30,31,59,65,89]
         #if i in skip:
         #if i in skip:
@@ -75,7 +75,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
         #    continue
         if i == 117:
             continue
-            
+
         data_time.update(time.time() - start)
 
         # Forward prop.
@@ -95,7 +95,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
         # Back prop.
         decoder_optimizer.zero_grad()
-        
+
         if encoder_optimizer is not None:
             encoder_optimizer.zero_grad()
         loss.backward()
@@ -119,10 +119,10 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
         # Print status
         if i % print_freq == 0:
-            print('Epoch: [{0}] [{1}/{2}]\n'
+            print('Epoch: [{0}] [{1}-{2}/{3}]\n'
                   'Batch Time {batch_time.val:.3f}s (Average:{batch_time.avg:.3f}s)\n'
                   'Data Load Time {data_time.val:.3f}s (Average:{data_time.avg:.3f}s)\n'
-                  'Loss {loss.val:.4f} (Average:{loss.avg:.4f})\n'.format(epoch, i, len(train_loader),
+                  'Loss {loss.val:.4f} (Average:{loss.avg:.4f})\n'.format(epoch, i, j, len(train_loader),
                                                                           batch_time=batch_time,
                                                                           data_time=data_time, loss=losses))
 
@@ -210,8 +210,8 @@ def main():
     decoder = decoder.to(device)
     encoder = encoder.to(device)
 
-    #criterion = nn.MSELoss().to(device)
-    criterion = traj_loss().to(device)
+    criterion = nn.MSELoss().to(device)
+    #criterion = traj_loss().to(device)
 
     dataset = GuiderDataset(data_path,0.2,max_len=max_len)
     train_loader = Data.DataLoader(dataset.train_set(), batch_size=batch_size, shuffle=False)
@@ -240,7 +240,7 @@ def main():
         loss, imgs, pred, pred_vis, enter, esc, length = validate(val_loader=val_loader,
                                     encoder=encoder, decoder=decoder, criterion=criterion)
         # visualize the last batch of validate epoch
-        visualize(vis_dir, imgs, pred_vis, None, enter, esc, length, epoch)
+        visualize(vis_dir, imgs, pred_vis, None, None, None, enter, esc, length, epoch)
 
         # Check if there was an improvement
         is_best = loss < best_loss

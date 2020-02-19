@@ -60,10 +60,10 @@ def predict(checkpoint ,data_path, output_path):
             h, c, h_inv, c_inv = decoder.init_hidden_state(encoder_out, enter, esc)
             
             # Create tensors to hold two coordination predictions
-            predictions = torch.zeros((batch_size,max_len,2)).to(device)  # (b,max_len,2)
+            predictions_ord = torch.zeros((batch_size,max_len,2)).to(device)  # (b,max_len,2)
             predictions_inv = torch.zeros((batch_size,max_len,2)).to(device)  # (b,max_len,2)
 
-            predictions[:,0,:] = enter
+            predictions_ord[:,0,:] = enter
             predictions_inv[:,max_len-1,:] = esc
 
             for t in range(max_len):
@@ -80,10 +80,10 @@ def predict(checkpoint ,data_path, output_path):
                 #attention_weighted_encoding_inv = gate_inv * attention_weighted_encoding_inv
             
                 h, c = decoder.decoder(
-                    predictions[:,t,:],
+                    predictions_ord[:,t,:],
                     (h_a, c_a))  # (batch_size_t, decoder_dim)
                 
-                h_inv, c_inv = decoder.decoder(
+                h_inv, c_inv = decoder.decoder_inv(
                     predictions_inv[:,max_len-1-t,:],
                     (h_b, c_b))
                 
@@ -95,7 +95,7 @@ def predict(checkpoint ,data_path, output_path):
                 preds = decoder.fc(decoder.dropout(h))  # (batch_size_t, 2)
                 preds_inv = decoder.fc(decoder.dropout(h_inv))
                 if t < max_len - 1:
-                    predictions[:, t + 1, :] = preds # (b,max_len,2)
+                    predictions_ord[:, t + 1, :] = preds # (b,max_len,2)
                     predictions_inv[:, max_len-2-t,:] = preds_inv
             
             ## weight scheme 1
@@ -115,12 +115,12 @@ def predict(checkpoint ,data_path, output_path):
             
             weights = torch.tensor(weights,dtype=torch.float).to(device).unsqueeze(0).unsqueeze(2)
             weights_inv = torch.tensor(weights_inv, dtype=torch.float).to(device).unsqueeze(0).unsqueeze(2)
-            predictions = (predictions * weights + predictions_inv * weights_inv)
+            predictions = (predictions_ord * weights + predictions_inv * weights_inv)
             
             output_dir = output_path + 'batch-{}/'.format(i)
             if not os.path.exists(output_dir):
                 os.mkdir(output_dir)
-            visualize(output_dir,imgs, predictions, data['seq'], enter, esc, length, 'pred')
+            visualize(output_dir,imgs, predictions, predictions_ord, predictions_inv, data['seq'], enter, esc, length, 'pred')
             
 
 if __name__ == '__main__':

@@ -13,7 +13,7 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 
 
-def visualize(output_dir,imgs, seq, seq_gt, enter, esc, length, epoch):
+def visualize(output_dir,imgs, seq, seq_ord, seq_inv, seq_gt, enter, esc, length, epoch):
     """
     visualize a output of validation epoch
     
@@ -47,6 +47,27 @@ def visualize(output_dir,imgs, seq, seq_gt, enter, esc, length, epoch):
         img = img[...,::-1] #rgb --> bgr
         #print(enter[k],esc[k])
         img = cv.copyMakeBorder(img, 5, 5, 5, 5, cv.BORDER_CONSTANT,value=[225,225,225])
+        
+        if seq_ord is not None:
+            for j in range(length[k]):
+                m, n = int(h/2+seq_ord[k][j,1]*(h/2-1)),int(h/2+seq_ord[k][j,0]*(h/2-1))
+                if seq_ord[k][j,1] == 3:
+                    break
+                img[-m-3:-m+3,n-3:n+3,:] = np.zeros_like(img[-m-3:-m+3,n-3:n+3,:])
+                img[-m-3:-m+3,n-3:n+3,0] = 100
+                img[-m-3:-m+3,n-3:n+3,1] = 100
+                img[-m-3:-m+3,n-3:n+3,2] = 200
+        
+        if seq_inv is not None:
+            for j in range(length[k]):
+                m, n = int(h/2+seq_inv[k][j,1]*(h/2-1)),int(h/2+seq_inv[k][j,0]*(h/2-1))
+                if seq_inv[k][j,1] == 3:
+                    break
+                img[-m-3:-m+3,n-3:n+3,:] = np.zeros_like(img[-m-3:-m+3,n-3:n+3,:])
+                img[-m-3:-m+3,n-3:n+3,0] = 200
+                img[-m-3:-m+3,n-3:n+3,1] = 100
+                img[-m-3:-m+3,n-3:n+3,2] = 100
+        
         for j in range(length[k]):
             m, n = int(h/2+seq[k][j,1]*(h/2-1)),int(h/2+seq[k][j,0]*(h/2-1))
             if seq[k][j,1] == 3:
@@ -60,16 +81,19 @@ def visualize(output_dir,imgs, seq, seq_gt, enter, esc, length, epoch):
                 if seq[k][j,1] == 3:
                     break
                 img[-m-3:-m+3,n-3:n+3,:] = np.zeros_like(img[-m-3:-m+3,n-3:n+3,:]) + 100
-       
+        
+        enter = np.clip(enter,-0.95,1.)
+        esc = np.clip(esc,-0.95,1.)
+        
         # 红色是入点
-        img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,0] = 0
-        img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,1] = 0
-        img[-int(h/2+enter[k][1]*(h/2-1))-3:-int(h/2+enter[k][1]*(h/2-1))+3,int(h/2+enter[k][0]*(h/2-1))-3:int(h/2+enter[k][0]*(h/2-1))+3,2] = 200
+        img[-int(h/2+enter[k][1]*(h/2-1)):-int(h/2+enter[k][1]*(h/2-1))+6,int(h/2+enter[k][0]*(h/2-1))-6:int(h/2+enter[k][0]*(h/2-1)),0] = 0
+        img[-int(h/2+enter[k][1]*(h/2-1)):-int(h/2+enter[k][1]*(h/2-1))+6,int(h/2+enter[k][0]*(h/2-1))-6:int(h/2+enter[k][0]*(h/2-1)),1] = 0
+        img[-int(h/2+enter[k][1]*(h/2-1)):-int(h/2+enter[k][1]*(h/2-1))+6,int(h/2+enter[k][0]*(h/2-1))-6:int(h/2+enter[k][0]*(h/2-1)),2] = 200
         
         # 蓝色是出点
-        img[-int(h/2+esc[k][1]*(h/2-1))-3:-int(h/2+esc[k][1]*(h/2-1))+3,int(h/2+esc[k][0]*(h/2-1))-3:int(h/2+esc[k][0]*(h/2-1))+3,0] = 200
-        img[-int(h/2+esc[k][1]*(h/2-1))-3:-int(h/2+esc[k][1]*(h/2-1))+3,int(h/2+esc[k][0]*(h/2-1))-3:int(h/2+esc[k][0]*(h/2-1))+3,1] = 0
-        img[-int(h/2+esc[k][1]*(h/2-1))-3:-int(h/2+esc[k][1]*(h/2-1))+3,int(h/2+esc[k][0]*(h/2-1))-3:int(h/2+esc[k][0]*(h/2-1))+3,2] = 0
+        img[-int(h/2+esc[k][1]*(h/2-1)):-int(h/2+esc[k][1]*(h/2-1))+6,int(h/2+esc[k][0]*(h/2-1))-6:int(h/2+esc[k][0]*(h/2-1)),0] = 200
+        img[-int(h/2+esc[k][1]*(h/2-1)):-int(h/2+esc[k][1]*(h/2-1))+6,int(h/2+esc[k][0]*(h/2-1))-6:int(h/2+esc[k][0]*(h/2-1)),1] = 0
+        img[-int(h/2+esc[k][1]*(h/2-1)):-int(h/2+esc[k][1]*(h/2-1))+6,int(h/2+esc[k][0]*(h/2-1))-6:int(h/2+esc[k][0]*(h/2-1)),2] = 0
         
         #蓝色 出点方向
         

@@ -47,7 +47,8 @@ class GuiderDataset(Dataset):
                 if intervals_avg(seq) > 1:
                     continue
                 if seq[-1] == [2,2] or seq[0] == [2,2]:
-                    seq = seq[:-1] # !!! 暂不考虑
+                    continue
+                    seq = seq[:-1] # !!! 暂不考虑, 直接删掉终止点，作为一个断掉的轨迹
                 for i in range(len(seq)):
                     if isinstance(seq[i],tuple):
                         seq[i] = list(seq[i])
