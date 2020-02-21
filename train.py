@@ -37,7 +37,12 @@ vis_dir = './vis/' # store visualized result
 
 max_len = 12 # the longest sequence
 
-def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_optimizer, epoch):
+# calculate 
+lambd = 1.
+convsize = 7
+std = 1
+
+def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_optimizer, epoch, lambd, convsize, std):
     """
     Performs one epoch's training.
 
@@ -56,6 +61,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
     batch_time = AverageMeter()  # forward prop. + back prop. time
     data_time = AverageMeter()  # data loading time
     losses = AverageMeter()  # loss
+    wayslosses = AverageMeter()
 
     start = time.time()
 
@@ -88,9 +94,12 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
         # Remove timesteps that we didn't decode at, or are pads
         #pred = pack_padded_sequence(pred, length.squeeze(1), batch_first=True)
         #targets = pack_padded_sequence(targets, length.squeeze(1), batch_first=True)
-
+        
+        # used to calculate the loss of coordinates away from ways
+        reference = imgs.detach().permute(0,3,1,2) # (b, 1, encoded_image_size, encoded_image_size)
+        waysloss = cal_waysloss(reference, pred, pred_inv, convsize, std, device)
         # Calculate loss
-        loss = criterion(pred, targets) + criterion(pred_inv, targets_inv)
+        loss = criterion(pred, targets) + criterion(pred_inv, targets_inv) + lambd * waysloss
         #loss += alpha_c * ((1. - alphas.sum(dim=1)) ** 2).mean()
 
         # Back prop.
@@ -113,21 +122,23 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
         # Keep track of metrics
         losses.update(loss.item(), length.sum().item())
+        wayslosses.update(waysloss.item(), length.sum().item())
         batch_time.update(time.time() - start)
 
         start = time.time()
 
         # Print status
         if i % print_freq == 0:
-            print('Epoch: [{0}] [{1}-{2}/{3}]\n'
+            print('Epoch: [{0}] [{1}/{2}]\n'
                   'Batch Time {batch_time.val:.3f}s (Average:{batch_time.avg:.3f}s)\n'
                   'Data Load Time {data_time.val:.3f}s (Average:{data_time.avg:.3f}s)\n'
-                  'Loss {loss.val:.4f} (Average:{loss.avg:.4f})\n'.format(epoch, i, j, len(train_loader),
-                                                                          batch_time=batch_time,
-                                                                          data_time=data_time, loss=losses))
+                  'Loss {loss.val:.4f} (Average:{loss.avg:.4f})\n'
+                  'waysloss {waysloss.val:.4f} (Average:{waysloss.avg:.4f})\n'
+                  .format(epoch, i, len(train_loader),batch_time=batch_time,
+                          data_time=data_time, loss=losses, waysloss=wayslosses))
 
 
-def validate(val_loader, encoder, decoder, criterion):
+def validate(val_loader, encoder, decoder, criterion, lambd, convsize, std, device):
     
     decoder.eval()  # eval mode (no dropout or batchnorm)
     if encoder is not None:
@@ -135,6 +146,7 @@ def validate(val_loader, encoder, decoder, criterion):
 
     batch_time = AverageMeter()
     losses = AverageMeter()
+    wayslosses = AverageMeter()
 
     start = time.time()
 
@@ -163,12 +175,15 @@ def validate(val_loader, encoder, decoder, criterion):
             #pred_cal = pred.clone()
             #pred_cal = pack_padded_sequence(pred_cal, length.squeeze(1), batch_first=True)
             #targets = pack_padded_sequence(targets, length.squeeze(1), batch_first=True)
-
+            
+            reference = imgs_encode.detach().permute(0,3,1,2) # (b, 1,encoded_image_size, encoded_image_size)
+            waysloss = cal_waysloss(reference, pred, pred_inv, convsize, std, device)
             # Calculate loss
-            loss = criterion(pred, targets) + criterion(pred_inv, targets_inv)
+            loss = criterion(pred, targets) + criterion(pred_inv, targets_inv) + lambd * waysloss
 
             # Keep track of metrics
             losses.update(loss.item(),length.sum().item())
+            wayslosses.update(waysloss.item(),length.sum().item())
             batch_time.update(time.time() - start)
 
             start = time.time()
@@ -176,12 +191,14 @@ def validate(val_loader, encoder, decoder, criterion):
             if i % print_freq == 0:
                 print('Validation: [{0}/{1}]\n'
                       'Batch Time {batch_time.val:.3f}s (Average:{batch_time.avg:.3f}s)\n'
-                      'Loss {loss.val:.4f} (Average:{loss.avg:.4f})\n'.format(i, len(val_loader), batch_time=batch_time,loss=losses))
+                      'Loss {loss.val:.4f} (Average:{loss.avg:.4f})\n'
+                      'waysloss {waysloss.val:.4f} (Average:{waysloss.avg:.4f})\n'
+                      .format(i, len(val_loader), batch_time=batch_time,loss=losses, waysloss=wayslosses))
                 
     return losses.avg, imgs[sort_ind,:,:,:], pred, predictions_assemble, enter[sort_ind,:], esc[sort_ind,:], length[sort_ind,:]
 
 def main():
-    global epochs_since_improvement, checkpoint, start_epoch, fine_tune_encoder, best_loss, save_path, vis_dir, decoder_dim
+    global epochs_since_improvement, checkpoint, start_epoch, fine_tune_encoder, best_loss, save_path, vis_dir, decoder_dim, lambd, convsize, std
 
     if checkpoint is None:
         decoder = Decoder(decoder_dim)
@@ -234,11 +251,12 @@ def main():
               criterion=criterion,
               encoder_optimizer=encoder_optimizer,
               decoder_optimizer=decoder_optimizer,
-              epoch=epoch)
+              epoch=epoch, lambd=lambd, convsize=convsize, std=std)
 
         # One epoch's validation, return the average loss of each batch in this epoch
         loss, imgs, pred, pred_vis, enter, esc, length = validate(val_loader=val_loader,
-                                    encoder=encoder, decoder=decoder, criterion=criterion)
+                                    encoder=encoder, decoder=decoder, criterion=criterion,
+                                    lambd=lambd, convsize=convsize, std=std, device=device)
         # visualize the last batch of validate epoch
         visualize(vis_dir, imgs, pred_vis, None, None, None, enter, esc, length, epoch)
 
