@@ -78,13 +78,17 @@ def predict(checkpoint ,data_path, output_path):
                 #gate_inv = decoder.sigmoid(decoder.f_beta(h_b))
                 #attention_weighted_encoding = gate * attention_weighted_encoding
                 #attention_weighted_encoding_inv = gate_inv * attention_weighted_encoding_inv
-            
+                
+                # weight is attention (differ from var weights below)
+                weight = F.softmax(decoder.attention(h_a)) # weight for each input pixels
+                weight_inv = F.softmax(decoder.attention(h_b)) # (batch_size_t,n_pixels)
+                
                 h, c = decoder.decoder(
-                    predictions_ord[:,t,:],
+                    torch.cat([decoder.position_embedding(predictions_ord[:,t,:]),encoder_out[:,t,:] * weight],dim=1),
                     (h_a, c_a))  # (batch_size_t, decoder_dim)
                 
                 h_inv, c_inv = decoder.decoder_inv(
-                    predictions_inv[:,max_len-1-t,:],
+                    torch.cat([decoder.position_embedding(predictions_inv[:,max_len-1-t,:]),encoder_out[:,t,:] * weight_inv],dim=1),
                     (h_b, c_b))
                 
                 h = decoder.trans_h(h)

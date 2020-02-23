@@ -16,7 +16,7 @@ torch.manual_seed(0)
 torch.cuda.manual_seed(0)
 
 data_path = '/data/lzt/project/waysguider/dataset'
-decoder_dim = 128
+decoder_dim = 1024
 dropout = 0.5
 
 start_epoch = 1
@@ -40,7 +40,7 @@ max_len = 12 # the longest sequence
 # calculate 
 lambd = 1.
 convsize = 7
-std = 1
+std = 5
 
 def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_optimizer, epoch, lambd, convsize, std):
     """
