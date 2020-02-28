@@ -18,10 +18,12 @@ class GuiderDataset(Dataset):
         self.max_len = max_len # use to padding all sequence to a fixed length
         self.min_len = min_len # use to delete sequence with too many points
         self.target_inter = target_inter
-        self.pic_dir = os.path.join(self.dir,'map/')
+        self.pic_dir = os.path.join(self.dir,'map_big/')
         self.seq_dir = os.path.join(self.dir,'seq/')
         self.pic_name = []
         self.data = [] # use to store all seq
+        self.train_data = []
+        self.test_data = []
         self.trans = torchvision.transforms.ToTensor()
 
         for image in os.listdir(self.pic_dir):
@@ -32,7 +34,7 @@ class GuiderDataset(Dataset):
         # 1. normalize all coordinate according to the first element(x,y,w,h) in each npy file
         # 2. append the image file name to each coordinate sequence
         # 3. concate all sequence in npy file into one
-        for image_name in self.pic_name:
+        for k, image_name in enumerate(self.pic_name):
             data = np.load(os.path.join(self.seq_dir,image_name+'.npy'),allow_pickle=True)
             anchor = data[0]
             x,y = anchor[0]
@@ -65,9 +67,14 @@ class GuiderDataset(Dataset):
                     seq[i][0] = 2 * seq[i][0] - 1
                     seq[i][1] = 2 * seq[i][1] - 1
                 seq.append(image_name) # append cooresponding map image name to each sequence
-                self.data.append(seq) # seq is a list of list
+                if k < 20:
+                    self.test_data.append(seq)
+                else:
+                    self.train_data.append(seq)
+                
+                #self.data.append(seq) # seq is a list of list
 
-        self.train_data, self.test_data = train_test_split(self.data, test_size=test_size,random_state=0)
+        #self.train_data, self.test_data = train_test_split(self.data, test_size=test_size,random_state=0)
         print("="*50)
         print("Data Preprocess Done!")
         print("Dataset size:{}, train:{}, val:{}".

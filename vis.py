@@ -115,5 +115,5 @@ def visualize(output_dir,imgs, seq, seq_ord, seq_inv, seq_gt, enter, esc, length
         #    img[:,-5:,2] = 0
         #print(str(i*32+k)+'.png')
         
-        cv.imwrite(os.path.join(save_dir,str(k)+'_wayloss.png'),img)
+        cv.imwrite(os.path.join(save_dir,str(k)+'.png'),img)
 

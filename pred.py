@@ -19,7 +19,7 @@ torch.manual_seed(0)
 torch.cuda.manual_seed(0)
 
 checkpoint = './checkpoint/checkpoint_best.pth'
-data_path = '/data/lzt/project/waysguider/dataset/'
+data_path = '/data/lzt/project/waysguider_3/dataset/'
 output_path = './pred_vis/'
 
 def predict(checkpoint ,data_path, output_path):

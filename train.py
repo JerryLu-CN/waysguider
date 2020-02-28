@@ -15,7 +15,7 @@ torch.backends.cudnn.benchmark = True
 torch.manual_seed(0)
 torch.cuda.manual_seed(0)
 
-data_path = '/data/lzt/project/waysguider/dataset'
+data_path = '/data/lzt/project/waysguider_3/dataset'
 decoder_dim = 1024
 dropout = 0.5
 
@@ -64,8 +64,9 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
     wayslosses = AverageMeter()
 
     start = time.time()
-
+    
     for i,data in enumerate(train_loader):
+
         img_name = data['name']
         imgs = data['image'].to(device) # (b,c,w,h)
         seq = data['seq'].to(device) # (b,max_len,2)
@@ -74,12 +75,9 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
         esc = data['esc'].to(device) # (b,4) one-hot indicate four direction
         length = data['len'] # (b) it seem to be a 1D CPU int64 tensor when use pack_padded_sequence below
 
-        #skip = [10,30,31,59,65,89]
-        #if i in skip:
-        #if i in skip:
-        #    print(img_name)
-        #    continue
-        if i == 117:
+        skip = [114,115,118,212,214,247]
+
+        if i in skip:
             continue
 
         data_time.update(time.time() - start)
@@ -155,8 +153,11 @@ def validate(val_loader, encoder, decoder, criterion, lambd, convsize, std, devi
         # Batches
         for i, data in enumerate(val_loader):
             # Move to device, if available
-            if i == 23:
+            skip = [0,1,5]
+
+            if i in skip:
                 continue
+                
             imgs = data['image'].to(device)  # (b,c,w,h)
             seq = data['seq'].to(device)  # (b,max_len,2)
             seq_inv = data['seq_inv'].to(device)
