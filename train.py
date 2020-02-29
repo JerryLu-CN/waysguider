@@ -32,7 +32,7 @@ best_loss = 1.  # best loss score right now
 print_freq = 1  # print training/validation stats every __ batches
 fine_tune_encoder = False # fine-tune encoder?
 checkpoint = None  # path to checkpoint, None if none
-save_path = './checkpoint/' # checkpoint save path
+save_path = './checkpoint_big/' # checkpoint save path
 vis_dir = './vis/' # store visualized result
 
 max_len = 12 # the longest sequence
@@ -61,7 +61,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
     batch_time = AverageMeter()  # forward prop. + back prop. time
     data_time = AverageMeter()  # data loading time
     losses = AverageMeter()  # loss
-    wayslosses = AverageMeter()
+    #wayslosses = AverageMeter()
 
     start = time.time()
     
@@ -94,10 +94,11 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
         #targets = pack_padded_sequence(targets, length.squeeze(1), batch_first=True)
         
         # used to calculate the loss of coordinates away from ways
-        reference = imgs.detach().permute(0,3,1,2) # (b, 1, encoded_image_size, encoded_image_size)
-        waysloss = cal_waysloss(reference, pred, pred_inv, convsize, std, device)
+        #reference = imgs.detach().permute(0,3,1,2) # (b, 1, encoded_image_size, encoded_image_size)
+        #waysloss = cal_waysloss(reference, pred, pred_inv, convsize, std, device)
         # Calculate loss
-        loss = criterion(pred, targets) + criterion(pred_inv, targets_inv) + lambd * waysloss
+        loss = criterion(pred, targets) + criterion(pred_inv, targets_inv)
+        #+ lambd * waysloss
         #loss += alpha_c * ((1. - alphas.sum(dim=1)) ** 2).mean()
 
         # Back prop.
@@ -120,7 +121,7 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
 
         # Keep track of metrics
         losses.update(loss.item(), length.sum().item())
-        wayslosses.update(waysloss.item(), length.sum().item())
+        #wayslosses.update(waysloss.item(), length.sum().item())
         batch_time.update(time.time() - start)
 
         start = time.time()
@@ -131,9 +132,10 @@ def train(train_loader, encoder, decoder, criterion, encoder_optimizer, decoder_
                   'Batch Time {batch_time.val:.3f}s (Average:{batch_time.avg:.3f}s)\n'
                   'Data Load Time {data_time.val:.3f}s (Average:{data_time.avg:.3f}s)\n'
                   'Loss {loss.val:.4f} (Average:{loss.avg:.4f})\n'
-                  'waysloss {waysloss.val:.4f} (Average:{waysloss.avg:.4f})\n'
                   .format(epoch, i, len(train_loader),batch_time=batch_time,
-                          data_time=data_time, loss=losses, waysloss=wayslosses))
+                          data_time=data_time, loss=losses))
+            
+#             'waysloss {waysloss.val:.4f} (Average:{waysloss.avg:.4f})\n'
 
 
 def validate(val_loader, encoder, decoder, criterion, lambd, convsize, std, device):
@@ -144,7 +146,7 @@ def validate(val_loader, encoder, decoder, criterion, lambd, convsize, std, devi
 
     batch_time = AverageMeter()
     losses = AverageMeter()
-    wayslosses = AverageMeter()
+    #wayslosses = AverageMeter()
 
     start = time.time()
 
@@ -177,14 +179,15 @@ def validate(val_loader, encoder, decoder, criterion, lambd, convsize, std, devi
             #pred_cal = pack_padded_sequence(pred_cal, length.squeeze(1), batch_first=True)
             #targets = pack_padded_sequence(targets, length.squeeze(1), batch_first=True)
             
-            reference = imgs_encode.detach().permute(0,3,1,2) # (b, 1,encoded_image_size, encoded_image_size)
-            waysloss = cal_waysloss(reference, pred, pred_inv, convsize, std, device)
+            #reference = imgs_encode.detach().permute(0,3,1,2) # (b, 1,encoded_image_size, encoded_image_size)
+            #waysloss = cal_waysloss(reference, pred, pred_inv, convsize, std, device)
             # Calculate loss
-            loss = criterion(pred, targets) + criterion(pred_inv, targets_inv) + lambd * waysloss
+            loss = criterion(pred, targets) + criterion(pred_inv, targets_inv)
+            #+ lambd * waysloss
 
             # Keep track of metrics
             losses.update(loss.item(),length.sum().item())
-            wayslosses.update(waysloss.item(),length.sum().item())
+            #wayslosses.update(waysloss.item(),length.sum().item())
             batch_time.update(time.time() - start)
 
             start = time.time()
@@ -193,8 +196,8 @@ def validate(val_loader, encoder, decoder, criterion, lambd, convsize, std, devi
                 print('Validation: [{0}/{1}]\n'
                       'Batch Time {batch_time.val:.3f}s (Average:{batch_time.avg:.3f}s)\n'
                       'Loss {loss.val:.4f} (Average:{loss.avg:.4f})\n'
-                      'waysloss {waysloss.val:.4f} (Average:{waysloss.avg:.4f})\n'
-                      .format(i, len(val_loader), batch_time=batch_time,loss=losses, waysloss=wayslosses))
+                      .format(i, len(val_loader), batch_time=batch_time,loss=losses))
+# 'waysloss {waysloss.val:.4f} (Average:{waysloss.avg:.4f})\n'
                 
     return losses.avg, imgs[sort_ind,:,:,:], pred, predictions_assemble, enter[sort_ind,:], esc[sort_ind,:], length[sort_ind,:]
 

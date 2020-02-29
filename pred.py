@@ -18,7 +18,7 @@ torch.backends.cudnn.benchmark = True
 torch.manual_seed(0)
 torch.cuda.manual_seed(0)
 
-checkpoint = './checkpoint/checkpoint_best.pth'
+checkpoint = './checkpoint_big/checkpoint_best.pth'
 data_path = '/data/lzt/project/waysguider_3/dataset/'
 output_path = './pred_vis/'
 
