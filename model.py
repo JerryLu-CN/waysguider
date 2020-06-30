@@ -6,6 +6,7 @@ import torchvision
 from torchvision import models
 from torchvision.models.vgg import VGG
 from utils import *
+import cv2 as cv
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -18,17 +19,17 @@ class Encoder(nn.Module):
     def __init__(self, encoded_image_size=64, fine_tune=True):
         super(Encoder, self).__init__()
         self.enc_image_size = encoded_image_size
-        
+
         # use resnet as pretrain model
         #resnet = torchvision.models.resnet50(pretrained=True)
 
         # Remove linear and pool layers (since we're not doing classification)
         #modules = list(resnet.children())[:-2]
         #self.encodenet = nn.Sequential(*modules)
-        
+
         # use hrnet pretrained result
         #self.encodenet = torch.load('model_best.pth')
-        
+
         # use fcn8s as pretrained result
         vgg_model = VGGNet(pretrained=False, requires_grad=True, remove_fc=True)
         fcn_model = FCN8s(pretrained_net=vgg_model, n_class=2)
@@ -39,7 +40,7 @@ class Encoder(nn.Module):
         self.encodenet = fcn_model
         self.encodenet.load_state_dict(pretrained_dict)
         self.conv = nn.Conv2d(32, 1, kernel_size=1, stride=1, padding=0, dilation=1)
-        
+
         # Resize image to fixed size to allow input images of variable size
         self.adaptive_pool = nn.AdaptiveAvgPool2d((encoded_image_size, encoded_image_size))
         if fine_tune:
@@ -136,7 +137,7 @@ class Decoder(nn.Module):
         #self.f_beta = nn.Linear(decoder_dim*2, encoder_size)
         self.sigmoid= nn.Sigmoid()
         self.fc = nn.Linear(decoder_dim, 2) # regression question
-        
+
         self.init_weights()
 
     def init_weights(self):
@@ -204,7 +205,7 @@ class Decoder(nn.Module):
         predictions = torch.zeros((batch_size, sequence.shape[1], 2)).to(device)  # (b,max_len(2~t),e_size)
         predictions_inv = torch.zeros((batch_size, sequence.shape[1], 2)).to(device)  # (b,max_len,e_size)
         predictions_assemble = torch.zeros((batch_size,sequence.shape[1]+1,2)).to(device)
-        
+
         #alphas = torch.zeros((batch_size, sequence.shape[1], num_pixels)).to(device)
         #alphas_inv = torch.zeros((batch_size, sequence.shape[1], num_pixels)).to(device)
 
@@ -216,21 +217,21 @@ class Decoder(nn.Module):
             h_b = torch.cat([h_inv,h],dim=1)
             c_a = torch.cat([c,c_inv],dim=1)
             c_b = torch.cat([c_inv,c],dim=1)
-            
+
             batch_size_t = sum([l > t for l in seq_len])
             #attention_weighted_encoding, alpha = self.attention(encoder_out[:batch_size_t],
             #                                                    h_a[:batch_size_t]) #(b,e_size) (b,e_size)
             #attention_weighted_encoding_inv, alpha_inv = self.attention(encoder_out[:batch_size_t],
             #                                                    h_b[:batch_size_t])
-            #gate = self.sigmoid(self.f_beta(h_a[:batch_size_t]))            
+            #gate = self.sigmoid(self.f_beta(h_a[:batch_size_t]))
             #gate_inv = self.sigmoid(self.f_beta(h_b[:batch_size_t]))
 
             #attention_weighted_encoding = gate * attention_weighted_encoding
             #attention_weighted_encoding_inv = gate_inv * attention_weighted_encoding_inv
-            
+
             weight = F.softmax(self.attention(h_a[:batch_size_t])) # weight for each input pixels
             weight_inv = F.softmax(self.attention(h_b[:batch_size_t])) # (batch_size_t,n_pixels)
-            
+
             h, c = self.decoder(
                 torch.cat([sequence[:batch_size_t,t,:],encoder_out[:batch_size_t,t,:] * weight],dim=1),
                 (h_a[:batch_size_t,:], c_a[:batch_size_t,:]))  # (batch_size_t, decoder_dim)
@@ -242,7 +243,7 @@ class Decoder(nn.Module):
             c = self.trans_c(c)
             h_inv = self.trans_h(h_inv)
             c_inv = self.trans_c(c_inv)
-            
+
             preds = self.fc(self.dropout(h))  # (batch_size_t, 2)
             preds_inv = self.fc(self.dropout(h_inv))
             predictions[:batch_size_t, t, :] = preds # (b,max_len,2)
@@ -250,15 +251,16 @@ class Decoder(nn.Module):
             predictions_assemble[:batch_size_t, sequence.shape[1]-1-t,:] # used to store a visualizable result
             #alphas[:batch_size_t,t,:] = alpha # this is used to visualize(not implemented yet), and add regularization
             #alphas_inv[:batch_size_t,t,:] = alpha_inv
-            
+
             # visualizable result
             predictions_assemble = move_forward(predictions_assemble, seq_len, device)
             predictions_assemble[:,1:,:] += predictions.data
             predictions_assemble[:,1:-1,:] /= 2
+            print('prediction_assemble: ',predictions_assemble)
             # a weights to be implemented
             #weights = torch.range(0.1,1,seq_len) ??
             #predictions = (predictions + predictions_inv) / 2.
-        return predictions, predictions_inv, predictions_assemble, sort_ind, 
+        return predictions, predictions_inv, predictions_assemble, sort_ind,
 #alphas, alphas_inv
 
 
@@ -328,7 +330,7 @@ class VGGNet(VGG):
             output["x%d"%(idx+1)] = x
 
         return output
-    
+
 ranges = {
     'vgg11': ((0, 3), (3, 6),  (6, 11),  (11, 16), (16, 21)),
     'vgg13': ((0, 5), (5, 10), (10, 15), (15, 20), (20, 25)),
@@ -358,3 +360,112 @@ def make_layers(cfg, batch_norm=False):
                 layers += [conv2d, nn.ReLU(inplace=True)]
             in_channels = v
     return nn.Sequential(*layers)
+
+
+
+
+#Discriminator
+'''
+class Discriminator(nn.Module):
+    def __init__(self, encoder_size=4096, hidden_units=1024, use_cuda=False): #hidden_units = decoder_dim
+        super(Discriminator,self).__init__()
+        self.lstm_cell = nn.LSTMCell(input_size=2, hidden_size=hidden_units)
+        self.fc = nn.Linear(hidden_units, 2, bias=True)
+        self.soft = nn.Softmax()
+        self.init_h = nn.Linear(encoder_size, hidden_units)
+        self.init_c = nn.Linear(encoder_size, hidden_units)
+
+    def init_hidden_state(self, encoder_out):
+        flat_encoder_out = encoder_out.view(encoder_out.shape[0],-1)
+        h = self.init_h(flat_encoder_out)
+        c = self.init_c(flat_encoder_out)
+        return h, c
+
+    def forward(self, z_seq, encoder_out): # z = [x_t,y_t] state = (h_t, c_t)
+        state = self.init_hidden_state(encoder_out)
+
+        for z in range(z_seq.shape[1]):
+            input = z_seq[:,z,:]
+            state = self.lstm_cell(input, state)
+
+        h = state[0]
+        out = self.fc(h)
+        p = self.soft(out)
+
+        return p
+'''
+
+class Discriminator(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.N = 32
+
+        net = []
+        # 1:预先定义
+        channels_in = [2, 64, 128, 256]
+        channels_out = [64, 128, 256, 1]
+        padding = [1, 1, 1, 1, 0]
+        active = ["LR", "LR", "LR"]
+        for i in range(len(channels_in)):
+            net.append(nn.Conv2d(in_channels=channels_in[i], out_channels=channels_out[i],
+                                 kernel_size=4, stride=2, padding=padding[i], bias=False))
+            if i == 0:
+                net.append(nn.LeakyReLU(0.2))
+            elif i == 3:
+                continue
+            elif active[i] == "LR":
+                net.append(nn.BatchNorm2d(num_features=channels_out[i]))
+                net.append(nn.LeakyReLU(0.2))
+    
+                        
+    
+        self.maxpool = nn.MaxPool2d((2,2), stride = (2,2))
+        self.discriminator = nn.Sequential(*net)
+            
+    def get_grid(self,p):
+        d = 2/self.N
+        x = int((p[0] + 1)//d)
+        y = int((p[1] + 1)//d)
+        x = 31 if x >= 32 else x
+        y = 31 if y >= 32 else y
+
+        return x,y
+
+    def to_grid(self, seq):  #seq (batch_size, length, 2)
+        grid_seq = torch.zeros((seq.shape[0],self.N,self.N))
+        for i in range(seq.shape[0]):
+            for j in range(seq.shape[1]):
+                x, y = self.get_grid((seq[i][j][0],seq[i][j][1]))
+                grid_seq[i][x][y] = 1
+
+        return grid_seq   #grid_seq (batch_size, N, N)
+
+    def forward(self, seq, label):
+        x = self.to_grid(seq)
+        
+        label1 = label.detach()
+        for k in range(label1.shape[0]):
+            cv.imwrite('./label_pic64/'+str(k)+'.png', 255*label1[k].cpu().numpy())
+            np.save('./label_pic64/'+str(k)+'.npy', label1[k].cpu().numpy())
+        
+        input = torch.zeros((seq.shape[0], 2, self.N, self.N)).to(device)
+        label = torch.squeeze(label)
+        label = self.maxpool(label)
+        print('lable:')
+        print(label.shape)
+        
+        label2 = label.detach()
+        for k in range(label1.shape[0]):
+            cv.imwrite('./label_pic32/'+str(k)+'.png', 255*label2[k].cpu().numpy())
+            np.save('./label_pic32/'+str(k)+'.npy', label2[k].cpu().numpy())
+        
+        input[:,0,:,:] = x
+        input[:,1,:,:] = label
+        print('input:')
+        print(input.shape)
+        out = self.discriminator(input)
+        out = out.view(input.size(0), -1)
+        return out
+
+
+

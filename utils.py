@@ -80,32 +80,41 @@ def adjust_learning_rate(optimizer, shrink_factor):
         param_group['lr'] = param_group['lr'] * shrink_factor
     print("The new learning rate is %f\n" % (optimizer.param_groups[0]['lr'],))
 
-def save_checkpoint(save_dir, epoch, epochs_since_improvement, encoder, decoder, encoder_optimizer, decoder_optimizer,
-                    loss, is_best):
+def save_checkpoint(save_path, epoch, epochs_since_G_improvement, epochs_since_D_improvement, encoder, decoder, D, encoder_optimizer,
+                    decoder_optimizer, D_optimizer, G_loss, G_is_best, D_loss, D_is_best):
     """
     Saves model checkpoint.
     :param save_dir: store checkpoints here
     :param epoch: epoch number
-    :param epochs_since_improvement: number of epochs since last improvement in BLEU-4 score
+    :param epochs_since_G_improvement: number of epochs since last improvement in BLEU-4 score
+    :param epochs_since_D_improvement: number of epochs since last improvement in BLEU-4 score
     :param encoder: encoder model
     :param decoder: decoder model
+    :param D: Discriminator model
     :param encoder_optimizer: optimizer to update encoder's weights, if fine-tuning
     :param decoder_optimizer: optimizer to update decoder's weights
-    :param loss: validation loss score for this epoch
-    :param is_best: is this checkpoint the best so far?
+    :param D_optimizer: optimizer to update discriminator's weights
+    :param G_loss: G's validation loss score for this epoch
+    :param G_is_best: is this checkpoint the best so far?
+    :param D_loss: D's validation loss score for this epoch
+    :param D_is_best: is this checkpoint the best so far?
     """
     state = {'epoch': epoch,
-             'epochs_since_improvement': epochs_since_improvement,
-             'testLoss': loss,
+             'epochs_since_G_improvement': epochs_since_G_improvement,
+             'epochs_since_D_improvement': epochs_since_D_improvement,
+             'G_Loss': G_loss,
+             'D_Loss': D_loss,
              'encoder': encoder,
              'decoder': decoder,
+             'Discriminator': D,
              'encoder_optimizer': encoder_optimizer,
-             'decoder_optimizer': decoder_optimizer}
-    filename = save_dir +'checkpoint_' + 'epoch_' + str(epoch) + '_loss:{:.2f}'.format(loss) + '.pth'
+             'decoder_optimizer': decoder_optimizer,
+             'discriminator_optimizer': D_optimizer}
+    filename = save_path +'checkpoint_' + 'epoch_' + str(epoch) + '_loss:{:.2f}'.format(G_loss) + '.pth'
     torch.save(state, filename)
     # If this checkpoint is the best so far, store a copy so it doesn't get overwritten by a worse checkpoint
-    if is_best:
-        filename = save_dir +'checkpoint_' + 'best.pth'
+    if G_is_best:
+        filename = save_path +'checkpoint_' + 'best.pth'
         torch.save(state, filename)
         
 def cal_direction(point):
